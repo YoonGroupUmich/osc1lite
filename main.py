@@ -3,6 +3,7 @@
 import ok
 import time
 
+
 def SetAllZero(dev: ok.okCFrontPanel):
     dev.SetWireInValue(0x00, 0, 0xffff)
     dev.UpdateWireIns()
@@ -11,7 +12,8 @@ def SetAllZero(dev: ok.okCFrontPanel):
     for channel in range(12):
         dev.SetWireInValue(0x03 + channel, 0, 0xffff)
         dev.UpdateWireIns()
-        
+
+
 def SetControlReg(dev):
     assert dev.IsOpen()
     print('Setting Control Register')
@@ -23,11 +25,11 @@ def SetControlReg(dev):
     dev.UpdateWireIns()
     dev.SetWireInValue(0x01, 0, 0xffff)
     dev.UpdateWireIns()
-    
+
 
 def SysReset(dev: ok.okCFrontPanel):
     assert dev.IsOpen()
-    
+
     print('Reseting system to default state')
 
     dev.SetWireInValue(0x01, 4, 0xffff)
@@ -39,7 +41,7 @@ def SysReset(dev: ok.okCFrontPanel):
     dev.UpdateWireIns()
     dev.SetWireInValue(0x02, 0, 0xffff)
     dev.UpdateWireIns()
-    
+
     SetAllZero(dev)
 
     dev.SetWireInValue(0x00, 0, 0xffff)
@@ -55,8 +57,8 @@ def WriteToWireIn(dev, channel, val, mask=0xffff, update=True):
     if update:
         dev.UpdateWireIns()
     print('WriteToWireIn', channel, val)
-    
-    
+
+
 class ChannelInfo():
     def __init__(self, mode=0, amp=0, pw=0, period=10):
         """
@@ -65,11 +67,11 @@ class ChannelInfo():
         """
         self.mode = mode
         self.amp = amp  # uA, range(0, 24000)
-        #self.period = 10.23984375 # sec, cannot modify
+        # self.period = 10.23984375 # sec, cannot modify
         self.period = period
-        self.pulse_width = pw # sec
-    
-    
+        self.pulse_width = pw  # sec
+
+
 def UpdateWaveform(dev, ch):
     """
     for i in range(12):
@@ -80,7 +82,7 @@ def UpdateWaveform(dev, ch):
     for i in range(12):
         # Final amp = 24000uA / 65536 * ctlword
         # ctlword = mult * wirein
-        
+
         # mode 0 1  2  3  4
         # mult 1 3 13 25 50
         wirein = ch[i].amp / 24000 * 65536 / (1,3,13,25,50)[ch[i].mode]
@@ -93,24 +95,30 @@ def UpdateWaveform(dev, ch):
         #WriteToWireIn(dev, 0x1f if i == 0 else 0x21+i , 0xfffe, update=False)  # period
     """
     for i in range(12):
-        WriteToWireIn(dev, 0x03, round(ch[i].pulse_width / (2**11) * 13107200), update=False)
-        WriteToWireIn(dev, 0x04, round(ch[i].period / (2**11) * 13107200), update=False)
-        wirein = ch[i].amp / 24000 * 65536 / (1,3,13,25,50)[ch[i].mode]
+        WriteToWireIn(dev, 0x03,
+                      round(ch[i].pulse_width / (2 ** 11) * 13107200),
+                      update=False)
+        WriteToWireIn(dev, 0x04, round(ch[i].period / (2 ** 11) * 13107200),
+                      update=False)
+        wirein = ch[i].amp / 24000 * 65536 / (1, 3, 13, 25, 50)[ch[i].mode]
         WriteToWireIn(dev, 0x05, round(wirein), update=False)
         WriteToWireIn(dev, 0x06, ch[i].mode | (i << 4), update=True)
-        
+
         # Send trigger
-        WriteToWireIn(dev, 0x06, 0x0100, mask=0x0100, update=True)\
-        
+        time.sleep(0.01)
+        WriteToWireIn(dev, 0x06, 0x0100, mask=0x0100, update=True)
+        time.sleep(0.01)
+
     dev.UpdateWireIns()
-        
+
 
 def SetAll(dev):
     WriteToWireIn(dev, 0, 0)
     WriteToWireIn(dev, 1, 1)
-    
-    ch = [ChannelInfo(0, 1000, 1, 2) for i in range(1,13)]
+
+    ch = [ChannelInfo(0, 1000, 1, 2) for i in range(1, 13)]
     UpdateWaveform(dev, ch)
+
 
 def Configure(dev):
     ret = dev.ConfigureFPGA("OSC1_LITE_Control.bit")
@@ -133,7 +141,7 @@ def Configure(dev):
     else:
         print('ConfigureFPGA() =', ret)
     assert ret == dev.NoError
-    
+
     pll = ok.PLL22150()
     pll.SetReference(48.0, False)
     pll.SetVCOParameters(512, 125)
@@ -147,17 +155,18 @@ def Configure(dev):
     for i in range(2):
         print('PLL output #', i, 'freq =', pll.GetOutputFrequency(i), 'MHz')
         # We are using PLL 0 here
-    
+
 
 def main():
     dev = ok.okCFrontPanel()
- 
+
     # Enumerate devices
     deviceCount = dev.GetDeviceCount()
     for i in range(deviceCount):
-            print('Device[{0}] Model: {1}'.format(i, dev.GetDeviceListModel(i)))
-            print('Device[{0}] Serial: {1}'.format(i, dev.GetDeviceListSerial(i)))
+        print('Device[{0}] Model: {1}'.format(i, dev.GetDeviceListModel(i)))
+        print('Device[{0}] Serial: {1}'.format(i, dev.GetDeviceListSerial(i)))
     assert deviceCount
+
     # Open device
     dev.OpenBySerial("")
     time.sleep(0.01)
@@ -175,10 +184,11 @@ def main():
     SetAll(dev)
     while False:
         print('Hello, world')
-        for i in range(2**8):
+        for i in range(2 ** 8):
             print('Hello, world')
             time.sleep(0.3)
             WriteToWireIn(dev, 0x0f, i)
-    
+
+
 if __name__ == '__main__':
     main()

@@ -211,44 +211,60 @@ classdef OSC136H < handle
             	this.WriteToWireIn(hex2dec('03') + channel, 0, 16, 2731);
             end
         end
+        
+        function SetWaveformParams(this, channel, mode, amp, period, pulse_width)
+            this.WriteToWireIn(3, 0, 16, convergent(pulse_width / (2^11) * 13107200));
+            this.WriteToWireIn(4, 0, 16, convergent(period / (2^11) * 13107200));
+            mult = [1,3,13,25,50];
+            wirein = amp / 24000 * 65536 / mult(mode+1);
+            this.WriteToWireIn(5, 0, 16, convergent(wirein));
+            this.WriteToWireIn(6, 0, 16, bitor(mode, bitsll(channel-1, 4)));
+            pause(0.01);
+            this.WriteToWireIn(6, 8, 1, 1);
+            pause(0.01);
+        end
 
         function SetAll(this)
-            Cth = zeros(1:12);
-            Option = zeros(1:12);
-            amplitude = zeros(1:12);
+           % Cth = zeros(1:12);
+           % Option = zeros(1:12);
+           % amplitude = zeros(1:12);
            % Cmax = zeros(1:12);
-            for i = 1:2
-                Cth(i) = 50000*i;
-              %  Cmax(i) = 200;
-                Option(i) = 4;
-                switch Option(i)
-                    case 0
-                        amplitude(i) =  2^12;
-                    case 1
-                        amplitude(i) = floor(2^12/3);
-                    case 2
-                        amplitude(i) = floor(2^12/13);
-                    case 3 
-                        amplitude(i) = floor(2^12/25);
-                    case 4 
-                        amplitude(i) = floor(2^12/50);
-                    otherwise
-                        amplitude(i) = 0;
-                end
-            end
       
             	this.WriteToWireIn(hex2dec('00'), 0, 16, 0);
             	this.WriteToWireIn(hex2dec('01'), 0, 16, 1);
-            for channel = 0: 11
-            	this.WriteToWireIn(hex2dec('03') + channel, 0, 16, amplitude(channel+1));%input amplitude
+            for i = 1:12
+              this.SetWaveformParams(i, 0, 1000, 2, 1)
+              %  Cth(i) = 50000*i;
+              %%  Cmax(i) = 200;
+              %  Option(i) = 4;
+              %  switch Option(i)
+              %      case 0
+              %          amplitude(i) =  2^12;
+              %      case 1
+              %          amplitude(i) = floor(2^12/3);
+              %      case 2
+              %          amplitude(i) = floor(2^12/13);
+              %      case 3 
+              %          amplitude(i) = floor(2^12/25);
+              %      case 4 
+              %          amplitude(i) = floor(2^12/50);
+              %      otherwise
+              %          amplitude(i) = 0;
+              %  end
             end
-            for channel = 0:5
-                this.WriteToWireIn(hex2dec('0f') + channel, 0, 16, Cth(channel+1));%input Cth part 1
-                this.WriteToWireIn(hex2dec('18') + channel, 0, 16, Cth(channel+7));%input Cth part 2
-            end
-            for channel  = 0:2
-                this.WriteToWireIn(hex2dec('1e') + channel,0,16,Option(channel*4+1) + Option(channel*4+2)*2^4 + Option(channel*4+3)*2^8 + Option(channel*4+4)*2^12);
-            end
+      
+%            	this.WriteToWireIn(hex2dec('00'), 0, 16, 0);
+%            	this.WriteToWireIn(hex2dec('01'), 0, 16, 1);
+%            for channel = 0: 11
+%            	this.WriteToWireIn(hex2dec('03') + channel, 0, 16, amplitude(channel+1));%input amplitude
+%            end
+%            for channel = 0:5
+%                this.WriteToWireIn(hex2dec('0f') + channel, 0, 16, Cth(channel+1));%input Cth part 1
+%                this.WriteToWireIn(hex2dec('18') + channel, 0, 16, Cth(channel+7));%input Cth part 2
+%            end
+%            for channel  = 0:2
+%                this.WriteToWireIn(hex2dec('1e') + channel,0,16,Option(channel*4+1) + Option(channel*4+2)*2^4 + Option(channel*4+3)*2^8 + Option(channel*4+4)*2^12);
+%            end
         end
 
         
@@ -451,4 +467,5 @@ classdef OSC136H < handle
 
     end
 end
+
 
