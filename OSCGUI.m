@@ -141,7 +141,7 @@ classdef OSCGUI < handle
                             parent, 'FontSize', 9, 'Position', [.3 .90 - (chan - 1) * (1/13) .2 1/28], 'Background', 'white', 'UserData', struct('hs', hs, 'chan', chan), 'UserData', struct('hs', hs, 'chan', chan),...
                             'Callback', @this.TrigSelectorCB,'Enable','off');
                 this.toggle_button(hs, chan) = uicontrol('Style', 'togglebutton', 'String', 'Continuous Stream', 'Units', 'normalized', 'Parent', parent, 'UserData', struct('hs', hs, 'chan', chan),... 
-                            'Position', [.5 .901 - (chan - 1) * (1/13) .25 1/28], 'Backgroundcolor','g', 'UserData', struct('hs', hs, 'chan', chan), 'Callback', @this.ContinuousButtonCB,'Enable','off','Value',1);
+                            'Position', [.5 .901 - (chan - 1) * (1/13) .25 1/28], 'Backgroundcolor', [.5 .5 .5], 'UserData', struct('hs', hs, 'chan', chan), 'Callback', @this.ContinuousButtonCB,'Enable','off','Value',0);
                 
                 this.push_button (hs, chan) = uicontrol('Style', 'pushbutton', 'String', ['Trigger Channel  ', num2str(chan)], 'Units', 'normalized', 'Callback', @this.TriggerCallback, 'Parent',... 
                             parent, 'Position', [.75 .9002 - (chan - 1) * (1/13) .25 1/27.5], 'UserData', struct('Headstage', hs, 'Channel', chan), 'Enable','off');
@@ -397,9 +397,9 @@ classdef OSCGUI < handle
         end
         
         function CreateWaveformPanels(this)
-	        clk_panel = uipanel('Title', 'Choose your clock division:', 'FontSize', 12, 'BackgroundColor', 'white', 'Units', 'normalized',...
-	                  'Position', [.05 .50 - ((0 -1) * .13) .34 .13], 'Parent', this.f);
-        	this.PopulateClockPanels(clk_panel)
+            % clk_panel = uipanel('Title', 'Choose your clock division:', 'FontSize', 12, 'BackgroundColor', 'white', 'Units', 'normalized',...
+            %           'Position', [.05 .50 - ((0 -1) * .13) .34 .13], 'Parent', this.f);
+            % this.PopulateClockPanels(clk_panel)
             for wf = 1:4
                wf_panel = uipanel('Title', strcat("Waveform ", num2str(wf)), 'FontSize', 12, 'BackgroundColor', 'white', 'Units', 'normalized',...
                   'Position', [.05 .50 - ((wf -1) * .125) .34 .125], 'Parent', this.f);
@@ -570,7 +570,8 @@ classdef OSCGUI < handle
             amp = str2double(get(this.WF_amp_selectors(wf), 'String'));
             period = str2double(get(this.WF_period_selectors(wf), 'String'));
             pulse_width = str2double(get(this.WF_pw_selectors(wf), 'String'));
-            this.os.SetWaveformParams(source.UserData.Channel, mode, amp, period/1000, pulse_width/1000);
+            n_pulses = str2double(get(this.WF_pulse_selectors(wf), 'String'));
+            this.os.SetWaveformParams(source.UserData.Channel, mode, amp, period/1000, pulse_width/1000, n_pulses);
             % this.os.SetWaveformParams(source.UserData.Channel, );
             % if(this.os.Channels((source.UserData.Headstage - 1) * 12 + source.UserData.Channel, 1) == 1)
             %     this.os.UpdateChannelPipeWf(source.UserData.Headstage, source.UserData.Channel, 0);
@@ -587,7 +588,7 @@ classdef OSCGUI < handle
              set(this.push_button,'Enable','on');
              set(this.Channel_WF_selectors(1, :),'Enable','on');
              set(this.Channel_Trig_selectors(1, :),'Enable','on');
-             % set(this.WF_pulse_selectors,'Enable','on');
+             set(this.WF_pulse_selectors,'Enable','on');
              set(this.WF_period_selectors,'Enable','on');
              set(this.WF_amp_selectors,'Enable','on');
              set(this.WF_pw_selectors,'Enable','on');

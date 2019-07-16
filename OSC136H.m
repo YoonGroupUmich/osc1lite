@@ -212,12 +212,13 @@ classdef OSC136H < handle
             end
         end
         
-        function SetWaveformParams(this, channel, mode, amp, period, pulse_width)
+        function SetWaveformParams(this, channel, mode, amp, period, pulse_width, n_pulses)
             this.WriteToWireIn(3, 0, 16, convergent(pulse_width / (2^11) * 13107200));
             this.WriteToWireIn(4, 0, 16, convergent(period / (2^11) * 13107200));
             mult = [1,3,13,25,50];
             wirein = amp / 24000 * 65536 / mult(mode+1);
             this.WriteToWireIn(5, 0, 16, convergent(wirein));
+            this.WriteToWireIn(7, 0, 16, n_pulses);
             this.WriteToWireIn(6, 0, 16, bitor(mode, bitsll(channel-1, 4)));
             pause(0.01);
             this.WriteToWireIn(6, 8, 1, 1);
@@ -362,6 +363,7 @@ classdef OSC136H < handle
             % pause(0.1);
             this.WriteToWireIn(hex2dec('01'), 0, 16, 3);
             % pause(0.1);
+            this.WriteToWireIn(hex2dec('01'), 0, 16, 0);
             this.SetNoop();
         end    
 

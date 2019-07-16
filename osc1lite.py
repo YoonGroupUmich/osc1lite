@@ -7,7 +7,7 @@ import time
 
 
 class ChannelInfo:
-    def __init__(self, mode=0, amp=0, pw=0, period=10):
+    def __init__(self, mode=0, amp=0, pw=0, period=10, n_pulses=1):
         """
         mode controls the rising/falling edge width
         amp controls the wave amplitude
@@ -16,11 +16,12 @@ class ChannelInfo:
         self.amp = amp  # uA, range: [0, 24000]
         self.period = period  # sec, range: [0, 10.23]
         self.pulse_width = pw  # sec
+        self.n_pulses = n_pulses
 
 
 class OSC1Lite:
     _bit_file_sha256sum = (
-        '27b6cff4ae13b380971d8c186cb69dfa16d6eb75243ae34d5b587b1820c95c5f')
+        '94b37a12ac92f0d9f63f40e9bf69761149e609d1aa3b626dd11122ece559e4be')
 
     @staticmethod
     def _sha256sum(filename: str, block_size=2 ** 22):
@@ -119,6 +120,7 @@ class OSC1Lite:
         self._write_to_wire_in(0x05, round(
             data.amp / 24000 * 65536 / (1, 3, 13, 25, 50)[data.mode]),
                                update=False)
+        self._write_to_wire_in(0x07, data.n_pulses, update=False)
         self._write_to_wire_in(0x06, data.mode | (channel << 4), update=True)
 
         # Send trigger

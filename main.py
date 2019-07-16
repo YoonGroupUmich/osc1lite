@@ -32,7 +32,7 @@ def main():
     osc.reset()
     osc.init_dac()
 
-    ch = [osc1lite.ChannelInfo(0, 1000, .1, .2) for i in range(1, 13)]
+    ch = [osc1lite.ChannelInfo(0, 1000, .5, 1, n_pulses=i) for i in range(1, 13)]
     for idx, data in enumerate(ch):
         osc.set_channel(idx, data)
 
