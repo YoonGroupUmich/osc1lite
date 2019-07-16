@@ -10,21 +10,6 @@ import logging
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "DEBUG"))
 
 
-def SetControlReg(dev):
-    assert dev.IsOpen()
-    print('Setting Control Register')
-    dev.SetWireInValue(0x00, 0, 0xffff)
-    dev.UpdateWireIns()
-    dev.SetWireInValue(0x01, 5, 0xffff)
-    dev.UpdateWireIns()
-    time.sleep(0.1)
-    dev.SetWireInValue(0x01, 3, 0xffff)
-    dev.UpdateWireIns()
-    time.sleep(0.1)
-    dev.SetWireInValue(0x01, 0, 0xffff)
-    dev.UpdateWireIns()
-
-
 def main():
     dev = ok.okCFrontPanel()
 
@@ -43,11 +28,11 @@ def main():
     assert dev.IsOpen()
 
     osc = osc1lite.OSC1Lite(dev)
-    osc.configure(bit_file='OSC1_LITE_Control_bak.bit', ignore_hash_error=True)
+    osc.configure(bit_file='OSC1_LITE_Control.bit', ignore_hash_error=True)
     osc.reset()
     osc.init_dac()
 
-    ch = [osc1lite.ChannelInfo(0, 1000, .01, .02) for i in range(1, 13)]
+    ch = [osc1lite.ChannelInfo(0, 1000, .1, .2) for i in range(1, 13)]
     for idx, data in enumerate(ch):
         osc.set_channel(idx, data)
 

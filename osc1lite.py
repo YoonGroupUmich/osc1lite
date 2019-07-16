@@ -20,7 +20,7 @@ class ChannelInfo:
 
 class OSC1Lite:
     _bit_file_sha256sum = (
-        'eba329498f9fcf04344acde07245dce107f58ca3887bd3d51916b85a2998b366')
+        '27b6cff4ae13b380971d8c186cb69dfa16d6eb75243ae34d5b587b1820c95c5f')
 
     @staticmethod
     def _sha256sum(filename: str, block_size=2 ** 22):
