@@ -13,10 +13,10 @@ class ChannelInfo:
         amp controls the wave amplitude
         """
         self.mode = mode
-        self.amp = amp  # uA, range: [0, 24000]
+        self.amp = amp  # uA, range: [0, 24000]. Use amp=0 to stop the channel
         self.period = period  # sec, range: [0, 10.23]
         self.pulse_width = pw  # sec
-        self.n_pulses = n_pulses
+        self.n_pulses = n_pulses  # set n_pulses to 0 for continuous output
 
 
 class OSC1Lite:
@@ -112,6 +112,7 @@ class OSC1Lite:
         self._write_to_wire_in(0x00, 0)
 
     def set_channel(self, channel, data: ChannelInfo):
+        print('Sending params for channel', channel)
         self._write_to_wire_in(0x03,
                                round(data.pulse_width / (2 ** 11) * 13107200),
                                update=False)
@@ -123,7 +124,8 @@ class OSC1Lite:
         self._write_to_wire_in(0x07, data.n_pulses, update=False)
         self._write_to_wire_in(0x06, data.mode | (channel << 4), update=True)
 
-        # Send trigger
+        # Send data update trigger
+        time.sleep(0.1)
         self._write_to_wire_in(0x06, 0x0100, mask=0x0100, update=True)
 
     def reset(self):
@@ -135,6 +137,8 @@ class OSC1Lite:
         self.reset_pipe()
         for i in range(12):
             self.set_channel(i, ChannelInfo())
+        print('Reset done')
+        time.sleep(5)
 
     def init_dac(self):
         self._write_to_wire_in(0x01, 5)
@@ -143,4 +147,16 @@ class OSC1Lite:
 
     def enable_dac_output(self):
         self._write_to_wire_in(0x01, 1)
+
+    def trigger_channel(self, ch):
+        print('trigger', ch)
+        channel_bit = 0
+        try:
+            for x in ch:
+                channel_bit |= 1 << x
+        except TypeError:
+            channel_bit = 1 << ch
+        self._write_to_wire_in(0x08, channel_bit, mask=channel_bit, update=True)
+        time.sleep(0.1)
+        self._write_to_wire_in(0x08, 0, mask=channel_bit, update=True)
 

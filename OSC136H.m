@@ -212,17 +212,25 @@ classdef OSC136H < handle
             end
         end
         
-        function SetWaveformParams(this, channel, mode, amp, period, pulse_width, n_pulses)
+        function SetWaveformParams(this, channel, mode, amp, period, pulse_width, n_pulses, ext_trigger)
             this.WriteToWireIn(3, 0, 16, convergent(pulse_width / (2^11) * 13107200));
             this.WriteToWireIn(4, 0, 16, convergent(period / (2^11) * 13107200));
             mult = [1,3,13,25,50];
             wirein = amp / 24000 * 65536 / mult(mode+1);
             this.WriteToWireIn(5, 0, 16, convergent(wirein));
             this.WriteToWireIn(7, 0, 16, n_pulses);
-            this.WriteToWireIn(6, 0, 16, bitor(mode, bitsll(channel-1, 4)));
+            this.WriteToWireIn(6, 0, 16, bitor(bitor(mode, bitsll(channel-1, 4)), bitsll(ext_trigger, 9)));
             pause(0.01);
             this.WriteToWireIn(6, 8, 1, 1);
             pause(0.01);
+            if ext_trigger == 0
+                this.WriteToWireIn(8, channel-1, 1, 0);
+                pause(0.1);
+                this.WriteToWireIn(8, channel-1, 1, 1);
+                pause(0.1);
+                this.WriteToWireIn(8, channel-1, 1, 0);
+                pause(0.1);
+            end
         end
 
         function SetAll(this)

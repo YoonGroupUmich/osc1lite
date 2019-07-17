@@ -25,6 +25,7 @@ classdef OSCGUI < handle
       
       toggle_button
       push_button
+      stop_button
       
       load_parameter_button
       save_parameter_button
@@ -86,7 +87,9 @@ classdef OSCGUI < handle
                 this.connected_serial_name = 'No connected devices'; 
                 this.CreateSetup();
                 this.CreateHeadstagePanels();
-                this.CreateWaveformPanels();            
+                this.CreateWaveformPanels();
+                uicontrol('Style', 'text', 'FontSize', 20,'String', 'OSC1Lite v0.0.1', 'Units', 'normalized',...
+                          'Parent',this.f, 'Position', [.4 .05 .55 .05]);
         end
         
         function CloseRequestCallback(hObject,eventdata)
@@ -143,9 +146,10 @@ classdef OSCGUI < handle
                 this.toggle_button(hs, chan) = uicontrol('Style', 'togglebutton', 'String', 'Continuous Stream', 'Units', 'normalized', 'Parent', parent, 'UserData', struct('hs', hs, 'chan', chan),... 
                             'Position', [.5 .901 - (chan - 1) * (1/13) .25 1/28], 'Backgroundcolor', [.5 .5 .5], 'UserData', struct('hs', hs, 'chan', chan), 'Callback', @this.ContinuousButtonCB,'Enable','off','Value',0);
                 
-                this.push_button (hs, chan) = uicontrol('Style', 'pushbutton', 'String', ['Trigger Channel  ', num2str(chan)], 'Units', 'normalized', 'Callback', @this.TriggerCallback, 'Parent',... 
-                            parent, 'Position', [.75 .9002 - (chan - 1) * (1/13) .25 1/27.5], 'UserData', struct('Headstage', hs, 'Channel', chan), 'Enable','off');
-                                    
+                this.push_button (hs, chan) = uicontrol('Style', 'pushbutton', 'String', ['Trigger Channel  ', num2str(chan)], 'Units', 'normalized', 'Callback', @this.TriggerCallback, 'Parent',...
+                            parent, 'Position', [.75 .9002 - (chan - 1) * (1/13) .125 1/27.5], 'UserData', struct('Headstage', hs, 'Channel', chan), 'Enable','off');
+                this.stop_button (hs, chan) = uicontrol('Style', 'pushbutton', 'String', ['Stop Channel  ', num2str(chan)], 'Units', 'normalized', 'Callback', @this.StopChannelCallback, 'Parent',...
+                            parent, 'Position', [.875 .9002 - (chan - 1) * (1/13) .125 1/27.5], 'UserData', struct('Headstage', hs, 'Channel', chan), 'Enable','off');
                 if mod(chan, 3) == 1
                     set(LED(chan),'Backgroundcolor',[135/255 206/255 250/255]);
                 else
@@ -167,32 +171,38 @@ classdef OSCGUI < handle
         end
         
         function WFSelectorCB(this, source, eventdata)
-            this.os.UpdateChannelWaveform(source.UserData.hs, source.UserData.chan, get(source, 'Value'));
+            %this.os.UpdateChannelWaveform(source.UserData.hs, source.UserData.chan, get(source, 'Value'));
             this.ThrowException();
         end
         
         function TrigSelectorCB(this, source, eventdata)
-            this.os.UpdateChannelTriggerType(source.UserData.hs, source.UserData.chan, get(source, 'Value') - 1);
+            %this.os.UpdateChannelTriggerType(source.UserData.hs, source.UserData.chan, get(source, 'Value') - 1);
+            chan = source.UserData.chan;
+            if get(source, 'Value') == 1  % PC trigger
+                set(this.push_button(chan), 'String', ['Trigger Channel  ', num2str(chan)])
+            else
+                set(this.push_button(chan), 'String', 'Update params')
+            end
             this.ThrowException();
         end
         
         function ContinuousButtonCB(this, source, eventdata)
             state = get(source, 'Value');
             if state == get(source, 'Max')
-               if(this.os.Channels((source.UserData.hs - 1) * 12 + source.UserData.chan, 1) == 1)
-                  this.os.UpdateChannelPipeWf(source.UserData.hs, source.UserData.chan, 0);
-                  this.os.UpdatePipeInfo(numel(this.pipe_data), 65535);
-                  this.os.TriggerPipe(source.UserData.hs, source.UserData.chan, this.pipe_data);
-               else
-                  this.os.ToggleContinuous(source.UserData.hs, source.UserData.chan, 1);
-               end
+               %if(this.os.Channels((source.UserData.hs - 1) * 12 + source.UserData.chan, 1) == 1)
+               %   this.os.UpdateChannelPipeWf(source.UserData.hs, source.UserData.chan, 0);
+               %   this.os.UpdatePipeInfo(numel(this.pipe_data), 65535);
+               %   this.os.TriggerPipe(source.UserData.hs, source.UserData.chan, this.pipe_data);
+               %else
+               %   this.os.ToggleContinuous(source.UserData.hs, source.UserData.chan, 1);
+               %end
                set(source, 'Background', 'g');
             else
-               if(this.os.Channels((source.UserData.hs - 1) * 12 + source.UserData.chan, 1) == 1)
-                  this.os.UpdatePipeInfo(numel(this.pipe_data), 0);
-               else
-                  this.os.ToggleContinuous(source.UserData.hs, source.UserData.chan, 0);
-               end
+               %if(this.os.Channels((source.UserData.hs - 1) * 12 + source.UserData.chan, 1) == 1)
+               %   this.os.UpdatePipeInfo(numel(this.pipe_data), 0);
+               %else
+               %   this.os.ToggleContinuous(source.UserData.hs, source.UserData.chan, 0);
+               %end
                set(source, 'Backgroundcolor',[.5 .5 .5]);
             end
             this.ThrowException();
@@ -464,7 +474,7 @@ classdef OSCGUI < handle
             val = get(source, 'String');
             num = str2double(val);
             if ~isnan(num)
-                ec = this.os.UpdateWaveformPulses(source.UserData.wf, num);
+                %ec = this.os.UpdateWaveformPulses(source.UserData.wf, num);
             end
             if isnan(num)
                errordlg('Please enter only numeric values for number of pulses.', 'Type Error');
@@ -537,8 +547,8 @@ classdef OSCGUI < handle
             num = str2double(val);
             if ~isnan(num)
             %    ec = this.os.UpdateWaveformPeriod(source.UserData.wf, num);
-                if num ~= 0 & num ~= 0.1 & num ~= 0.5 & num ~= 1 & num ~= 2
-                    ec = -1
+                if num ~= 0 && num ~= 0.1 && num ~= 0.5 && num ~= 1 && num ~= 2
+                    ec = -1;
                 end
             end
             if ec == -1
@@ -571,7 +581,25 @@ classdef OSCGUI < handle
             period = str2double(get(this.WF_period_selectors(wf), 'String'));
             pulse_width = str2double(get(this.WF_pw_selectors(wf), 'String'));
             n_pulses = str2double(get(this.WF_pulse_selectors(wf), 'String'));
-            this.os.SetWaveformParams(source.UserData.Channel, mode, amp, period/1000, pulse_width/1000, n_pulses);
+            if get(this.toggle_button(source.UserData.Channel), 'Value') == get(this.toggle_button(source.UserData.Channel), 'Max')
+                n_pulses = 0;
+            end
+            ext_trig = get(this.Channel_Trig_selectors(1, source.UserData.Channel), 'Value') - 1;
+            this.os.SetWaveformParams(source.UserData.Channel, mode, amp, period/1000, pulse_width/1000, n_pulses, ext_trig);
+            % this.os.SetWaveformParams(source.UserData.Channel, );
+            % if(this.os.Channels((source.UserData.Headstage - 1) * 12 + source.UserData.Channel, 1) == 1)
+            %     this.os.UpdateChannelPipeWf(source.UserData.Headstage, source.UserData.Channel, 0);
+            %     this.os.UpdatePipeInfo(numel(this.pipe_data), this.num_pipe_pulse);
+            %     this.os.TriggerPipe(source.UserData.Headstage, source.UserData.Channel, this.pipe_data);
+            % else
+            %     this.os.TriggerChannel(source.UserData.Headstage, source.UserData.Channel);
+            % end
+            this.ThrowException();
+        end
+
+        function StopChannelCallback(this, source, eventdata)
+            fprintf('Stop Channel #%d\n', source.UserData.Channel);
+            this.os.SetWaveformParams(source.UserData.Channel, 0, 0, 0, 0.002, 1, 0);
             % this.os.SetWaveformParams(source.UserData.Channel, );
             % if(this.os.Channels((source.UserData.Headstage - 1) * 12 + source.UserData.Channel, 1) == 1)
             %     this.os.UpdateChannelPipeWf(source.UserData.Headstage, source.UserData.Channel, 0);
@@ -584,8 +612,9 @@ classdef OSCGUI < handle
         end
         
         function UpdateEnable(this)
-             % set(this.toggle_button,'Enable','on');
+             set(this.toggle_button,'Enable','on');
              set(this.push_button,'Enable','on');
+             set(this.stop_button,'Enable','on');
              set(this.Channel_WF_selectors(1, :),'Enable','on');
              set(this.Channel_Trig_selectors(1, :),'Enable','on');
              set(this.WF_pulse_selectors,'Enable','on');
