@@ -22,10 +22,12 @@ classdef OSCGUI < handle
       WF_amp_selectors
       WF_pw_selectors
       WF_risetime_selectors
+      WF_delete
       
       toggle_button
       push_button
       stop_button
+      trigger_out_button
       
       load_parameter_button
       save_parameter_button
@@ -135,21 +137,23 @@ classdef OSCGUI < handle
         function PopulateHeadstagePanel(this, parent, hs)
             for chan = 1:12
                 LED(chan) = uicontrol('Style', 'text', 'FontSize', 9, 'String', strcat(' LED ', num2str(mod(chan - 1, 3) + 1)), 'Units', 'normalized', 'Parent',... 
-                            parent, 'Position', [.039 .90 - (chan - 1) * (1/13) .06 1/28]);                        
+                            parent, 'Position', [.039, .90 - (chan - 1) * (1/13), .06, 1/28]);                        
                 this.Channel_WF_selectors(hs, chan) = uicontrol('Style', 'popupmenu', 'String', {'Waveform 1', 'Waveform 2', 'Waveform 3', 'Waveform 4' ...
                 % ,'Custom waveform'
                 }, 'Units', 'normalized', 'Parent',... 
-                            parent, 'FontSize', 9, 'Position', [.1 .90 - (chan - 1) * (1/13) .2 1/28], 'Background', 'white', 'UserData', struct('hs', hs, 'chan', chan), 'Callback', @this.WFSelectorCB,'Enable','off');
+                            parent, 'FontSize', 9, 'Position', [.1, .90 - (chan - 1) * (1/13), .15, 1/28], 'Background', 'white', 'UserData', struct('hs', hs, 'chan', chan), 'Callback', @this.WFSelectorCB);
                 this.Channel_Trig_selectors(hs, chan)= uicontrol('Style', 'popupmenu', 'String', {'PC Trigger', 'External Trigger'}, 'Units', 'normalized', 'Parent',... 
-                            parent, 'FontSize', 9, 'Position', [.3 .90 - (chan - 1) * (1/13) .2 1/28], 'Background', 'white', 'UserData', struct('hs', hs, 'chan', chan), 'UserData', struct('hs', hs, 'chan', chan),...
-                            'Callback', @this.TrigSelectorCB,'Enable','off');
+                            parent, 'FontSize', 9, 'Position', [.25, .90 - (chan - 1) * (1/13), .15, 1/28], 'Background', 'white', 'UserData', struct('hs', hs, 'chan', chan), 'UserData', struct('hs', hs, 'chan', chan),...
+                            'Callback', @this.TrigSelectorCB);
                 this.toggle_button(hs, chan) = uicontrol('Style', 'togglebutton', 'String', 'Continuous Stream', 'Units', 'normalized', 'Parent', parent, 'UserData', struct('hs', hs, 'chan', chan),... 
-                            'Position', [.5 .901 - (chan - 1) * (1/13) .25 1/28], 'Backgroundcolor', [.5 .5 .5], 'UserData', struct('hs', hs, 'chan', chan), 'Callback', @this.ContinuousButtonCB,'Enable','off','Value',0);
+                            'Position', [.4, .901 - (chan - 1) * (1/13), .15, 1/28], 'Backgroundcolor', [.5 .5 .5], 'UserData', struct('hs', hs, 'chan', chan), 'Callback', @this.ContinuousButtonCB,'Value',0);
                 
                 this.push_button (hs, chan) = uicontrol('Style', 'pushbutton', 'String', ['Trigger Channel  ', num2str(chan)], 'Units', 'normalized', 'Callback', @this.TriggerCallback, 'Parent',...
-                            parent, 'Position', [.75 .9002 - (chan - 1) * (1/13) .125 1/27.5], 'UserData', struct('Headstage', hs, 'Channel', chan), 'Enable','off');
+                            parent, 'Position', [.55, .9002 - (chan - 1) * (1/13), .15, 1/27.5], 'UserData', struct('Headstage', hs, 'Channel', chan), 'Enable','off');
                 this.stop_button (hs, chan) = uicontrol('Style', 'pushbutton', 'String', ['Stop Channel  ', num2str(chan)], 'Units', 'normalized', 'Callback', @this.StopChannelCallback, 'Parent',...
-                            parent, 'Position', [.875 .9002 - (chan - 1) * (1/13) .125 1/27.5], 'UserData', struct('Headstage', hs, 'Channel', chan), 'Enable','off');
+                            parent, 'Position', [.7, .9002 - (chan - 1) * (1/13), .15, 1/27.5], 'UserData', struct('Headstage', hs, 'Channel', chan), 'Enable','off');
+                this.trigger_out_button (hs, chan) = uicontrol('Style', 'togglebutton', 'String', 'Trigger Out', 'Units', 'normalized', 'Callback', @this.ContinuousButtonCB, 'Parent',...
+                            parent, 'Position', [.86, .9002 - (chan - 1) * (1/13), .14, 1/27.5], 'UserData', struct('Headstage', hs, 'Channel', chan));
                 if mod(chan, 3) == 1
                     set(LED(chan),'Backgroundcolor',[135/255 206/255 250/255]);
                 else
@@ -172,7 +176,7 @@ classdef OSCGUI < handle
         
         function WFSelectorCB(this, source, eventdata)
             %this.os.UpdateChannelWaveform(source.UserData.hs, source.UserData.chan, get(source, 'Value'));
-            this.ThrowException();
+            %this.ThrowException();
         end
         
         function TrigSelectorCB(this, source, eventdata)
@@ -183,7 +187,7 @@ classdef OSCGUI < handle
             else
                 set(this.push_button(chan), 'String', 'Update params')
             end
-            this.ThrowException();
+            %this.ThrowException();
         end
         
         function ContinuousButtonCB(this, source, eventdata)
@@ -205,7 +209,7 @@ classdef OSCGUI < handle
                %end
                set(source, 'Backgroundcolor',[.5 .5 .5]);
             end
-            this.ThrowException();
+            %this.ThrowException();
         end
         
         function CreateSetup(this)
@@ -230,11 +234,11 @@ classdef OSCGUI < handle
             uicontrol('Style', 'text', 'String', 'Select your OSC136H Opal Kelly Serial', 'Units', 'normalized', 'Parent',...
                 setup_panel, 'Position', [.05, .90, .4, .1], 'Background' , 'White')
                         
-            this.reset = uicontrol('Style','pushbutton','String','Reset','Units', 'normalized', 'Position',[.05 .05 .1 .05],'Callback',@this.ResetCallback,...
+            this.reset = uicontrol('Style','pushbutton','String','Reset','Units', 'normalized', 'Position',[.05 .17 .1 .05],'Callback',@this.ResetCallback,...
                 'Parent', this.f, 'Enable','off');
             align(this.reset,'Center','None');
                         
-            exit = uicontrol('Style','pushbutton','String','Exit','Units', 'normalized', 'Position',[.25 .05 .1 .05],'Callback',@this.ExitCallback,...
+            exit = uicontrol('Style','pushbutton','String','Exit','Units', 'normalized', 'Position',[.25 .17 .1 .05],'Callback',@this.ExitCallback,...
                 'Parent', this.f, 'Enable','on');
             align(exit,'Center','None');             
         end
@@ -262,7 +266,7 @@ classdef OSCGUI < handle
         function PipeCallback(this, source, eventdata)
             this.pipe_f.Visible = 'on';
             this.CreatePipePanel();
-            this.ThrowException();
+            %this.ThrowException();
         end
         
         function PipePulseUpdate(this, source, eventdata)
@@ -412,7 +416,7 @@ classdef OSCGUI < handle
             % this.PopulateClockPanels(clk_panel)
             for wf = 1:4
                wf_panel = uipanel('Title', strcat("Waveform ", num2str(wf)), 'FontSize', 12, 'BackgroundColor', 'white', 'Units', 'normalized',...
-                  'Position', [.05 .50 - ((wf -1) * .125) .34 .125], 'Parent', this.f);
+                  'Position', [.05, .625 - ((wf -1) * .125), .34, .125], 'Parent', this.f);
                this.PopulateWaveformPanels(wf_panel, wf);
             end
         end
@@ -447,9 +451,9 @@ classdef OSCGUI < handle
         
         function PopulateWaveformPanels(this, parent, wf)
             uicontrol('Style', 'text', 'String', 'Number of Pulses', 'Units', 'normalized', 'Parent',... 
-                parent, 'Position', [.2 .75 .2 .2], 'Background', 'white');
+                parent, 'Position', [.1 .75 .2 .2], 'Background', 'white');
             uicontrol('Style', 'text', 'String', 'Amplitude (uA)', 'Units', 'normalized', 'Parent',... 
-                parent, 'Position', [.5 .75 .2 .2], 'Background', 'white');
+                parent, 'Position', [.4 .75 .2 .2], 'Background', 'white');
             uicontrol('Style', 'text', 'String', 'Pulse Width(ms)', 'Units', 'normalized', 'Parent',... 
                 parent, 'Position', [.1 .25 .2 .2], 'Background', 'white');
             uicontrol('Style', 'text', 'String', 'Period(ms)', 'Units', 'normalized', 'Parent',... 
@@ -458,15 +462,18 @@ classdef OSCGUI < handle
                 parent, 'Position', [.7 .25 .2 .2], 'Background', 'white');
             
             this.WF_pulse_selectors(wf) = uicontrol('Style', 'edit', 'String', '0', 'Units', 'normalized', 'Parent',... 
-                parent, 'Position', [.2 .55 .2 .2], 'Background', 'white', 'UserData', struct('wf', wf), 'Callback', @this.PulseSelectCB,'Enable','off');
+                parent, 'Position', [.1 .55 .2 .2], 'Background', 'white', 'UserData', struct('wf', wf), 'Callback', @this.PulseSelectCB);
             this.WF_amp_selectors(wf) = uicontrol('Style', 'edit', 'String', '0', 'Units', 'normalized', 'Parent',... 
-                parent, 'Position', [.5 .55 .2 .2], 'Background', 'white', 'UserData', struct('wf', wf), 'Callback', @this.AmpSelectCB,'Enable','off');
+                parent, 'Position', [.4 .55 .2 .2], 'Background', 'white', 'UserData', struct('wf', wf), 'Callback', @this.AmpSelectCB);
             this.WF_pw_selectors(wf) = uicontrol('Style', 'edit', 'String', '0', 'Units', 'normalized', 'Parent',... 
-                parent, 'Position', [.1 .05 .2 .2], 'Background', 'white', 'UserData', struct('wf', wf), 'Callback', @this.PWSelectCB,'Enable','off');
+                parent, 'Position', [.1 .05 .2 .2], 'Background', 'white', 'UserData', struct('wf', wf), 'Callback', @this.PWSelectCB);
             this.WF_period_selectors(wf) = uicontrol('Style', 'edit', 'String', '0', 'Units', 'normalized', 'Parent',... 
-                parent, 'Position', [.4 .05 .2 .2], 'Background', 'white', 'UserData', struct('wf', wf), 'Callback', @this.PeriodSelectCB,'Enable','off');
+                parent, 'Position', [.4 .05 .2 .2], 'Background', 'white', 'UserData', struct('wf', wf), 'Callback', @this.PeriodSelectCB);
             this.WF_risetime_selectors(wf) = uicontrol('Style', 'edit', 'String', '0', 'Units', 'normalized', 'Parent',... 
-                parent, 'Position', [.7 .05 .2 .2], 'Background', 'white', 'UserData', struct('wf', wf), 'Callback', @this.RiseTimeSelectCB,'Enable','off');
+                parent, 'Position', [.7 .05 .2 .2], 'Background', 'white', 'UserData', struct('wf', wf), 'Callback', @this.RiseTimeSelectCB);
+            
+            this.WF_delete(wf) = uicontrol('Style', 'pushbutton', 'String', 'Delete', 'UserData', struct('wf', wf), 'Units', 'normalized', 'Parent',... 
+                parent, 'Position', [.67 .55 .26 .4]);
         end
         
         function PulseSelectCB(this, source, eventdata)
@@ -484,7 +491,7 @@ classdef OSCGUI < handle
                errordlg('Invalid value for num pulses, valid values integers in range 0 to 63', 'Num Pulses Range Error');
                this.UpdateParamDisplay();
             end
-            this.ThrowException();
+            %this.ThrowException();
         end
         
         function AmpSelectCB(this, source, eventdata)
@@ -502,7 +509,7 @@ classdef OSCGUI < handle
                errordlg('Invalid value for amplitude, valid values integers in range 0 to 1023 uA', 'Amplitude Range Error');
                this.UpdateParamDisplay();
             end
-            this.ThrowException();
+            %this.ThrowException();
         end
         
         function PWSelectCB(this,source, eventdata)
@@ -520,7 +527,7 @@ classdef OSCGUI < handle
                errordlg('Invalid value for pulse width, valid values multiples of 2.5 in range 0 to 637.5 ms', 'Pulse Width Range Error');
                this.UpdateParamDisplay();
             end
-            this.ThrowException();
+            %this.ThrowException();
         end
         
         function PeriodSelectCB(this, source, eventdata)
@@ -538,7 +545,7 @@ classdef OSCGUI < handle
                errordlg('Please enter only numeric values for period.', 'Type Error');
                this.UpdateParamDisplay();
             end
-            this.ThrowException();
+            %this.ThrowException();
         end
         
         function RiseTimeSelectCB(this, source, eventdata)
@@ -559,7 +566,7 @@ classdef OSCGUI < handle
                errordlg('Please enter only numeric values for period.', 'Type Error');
                this.UpdateParamDisplay();
             end
-            this.ThrowException();
+            %this.ThrowException();
         end
         
         function TriggerCallback(this, source, eventdata)
@@ -612,18 +619,19 @@ classdef OSCGUI < handle
         end
         
         function UpdateEnable(this)
-             set(this.toggle_button,'Enable','on');
+             % set(this.toggle_button,'Enable','on');
              set(this.push_button,'Enable','on');
              set(this.stop_button,'Enable','on');
-             set(this.Channel_WF_selectors(1, :),'Enable','on');
-             set(this.Channel_Trig_selectors(1, :),'Enable','on');
-             set(this.WF_pulse_selectors,'Enable','on');
-             set(this.WF_period_selectors,'Enable','on');
-             set(this.WF_amp_selectors,'Enable','on');
-             set(this.WF_pw_selectors,'Enable','on');
-             set(this.WF_risetime_selectors,'Enable','on');
+             % set(this.Channel_WF_selectors(1, :),'Enable','on');
+             % set(this.Channel_Trig_selectors(1, :),'Enable','on');
+             % set(this.WF_pulse_selectors,'Enable','on');
+             % set(this.WF_period_selectors,'Enable','on');
+             % set(this.WF_amp_selectors,'Enable','on');
+             % set(this.WF_pw_selectors,'Enable','on');
+             % set(this.WF_risetime_selectors,'Enable','on');
              % set(this.load_parameter_button,'Enable','on');
              % set(this.save_parameter_button,'Enable','on');
+             set(this.trigger_out_button, 'Enable', 'on');
              % set(this.pipe_button,'Enable','on');
              set(this.reset,'Enable','on');
         end

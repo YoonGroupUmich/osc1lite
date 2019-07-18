@@ -44,7 +44,8 @@ class OSC1Lite:
         Configure OSC1Lite. Should be called right after connected to the device
         :param ignore_hash_error: Allow bit file integrity check to fail
         :type ignore_hash_error: bool
-        :return:
+        :param bit_file: Path to bit file of FPGA
+        :type bit_file: str
         """
 
         # Integrity check for bit file
