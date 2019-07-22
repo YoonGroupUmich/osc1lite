@@ -7,7 +7,7 @@ import time
 
 
 class ChannelInfo:
-    def __init__(self, mode=0, amp=0, pw=0, period=10, n_pulses=1):
+    def __init__(self, mode=0, amp=0, pw=0, period=10, n_pulses=1, ext_trig=0):
         """
         mode controls the rising/falling edge width
         amp controls the wave amplitude
@@ -17,11 +17,12 @@ class ChannelInfo:
         self.period = period  # sec, range: [0, 10.23]
         self.pulse_width = pw  # sec
         self.n_pulses = n_pulses  # set n_pulses to 0 for continuous output
+        self.ext_trig = ext_trig  # 0: PC trigger, 1: external trigger
 
 
 class OSC1Lite:
     _bit_file_sha256sum = (
-        '94b37a12ac92f0d9f63f40e9bf69761149e609d1aa3b626dd11122ece559e4be')
+        '547c3d4190d5b846ce6e5d75fa90bddd5efc4465bdf8ff5528740ddd37f59918')
 
     @staticmethod
     def _sha256sum(filename: str, block_size=2 ** 22):
@@ -104,29 +105,29 @@ class OSC1Lite:
 
     def reset_dac(self):
         self._write_to_wire_in(0x01, 4)
-        time.sleep(0.1)
         self._write_to_wire_in(0x01, 0)
 
     def reset_pipe(self):
         self._write_to_wire_in(0x00, 1)
-        time.sleep(0.1)
         self._write_to_wire_in(0x00, 0)
 
     def set_channel(self, channel, data: ChannelInfo):
         print('Sending params for channel', channel)
-        self._write_to_wire_in(0x03,
-                               round(data.pulse_width / (2 ** 11) * 13107200),
-                               update=False)
-        self._write_to_wire_in(0x04, round(data.period / (2 ** 11) * 13107200),
-                               update=False)
-        self._write_to_wire_in(0x05, round(
-            data.amp / 24000 * 65536 / (1, 3, 13, 25, 50)[data.mode]),
-                               update=False)
+        word = round(data.pulse_width / (2 ** 11) * 13107200)
+        word = 0 if word < 0 else 0xffff if word > 0xffff else word
+        self._write_to_wire_in(0x03, word, update=False)
+        word = round(data.period / (2 ** 11) * 13107200)
+        word = 0 if word < 0 else 0xffff if word > 0xffff else word
+        self._write_to_wire_in(0x04, word, update=False)
+        word = round(data.amp / 24000 * 65536 / (1, 3, 13, 25, 50)[data.mode])
+        word = 0 if word < 0 else 0xffff if word > 0xffff else word
+        self._write_to_wire_in(0x05, word, update=False)
         self._write_to_wire_in(0x07, data.n_pulses, update=False)
-        self._write_to_wire_in(0x06, data.mode | (channel << 4), update=True)
+        self._write_to_wire_in(
+            0x06, data.mode | (channel << 4) | (data.ext_trig << 9),
+            update=True)
 
         # Send data update trigger
-        time.sleep(0.1)
         self._write_to_wire_in(0x06, 0x0100, mask=0x0100, update=True)
 
     def reset(self):
@@ -139,7 +140,6 @@ class OSC1Lite:
         for i in range(12):
             self.set_channel(i, ChannelInfo())
         print('Reset done')
-        time.sleep(5)
 
     def init_dac(self):
         self._write_to_wire_in(0x01, 5)
@@ -158,6 +158,4 @@ class OSC1Lite:
         except TypeError:
             channel_bit = 1 << ch
         self._write_to_wire_in(0x08, channel_bit, mask=channel_bit, update=True)
-        time.sleep(0.1)
         self._write_to_wire_in(0x08, 0, mask=channel_bit, update=True)
-

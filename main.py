@@ -32,13 +32,20 @@ def main():
     osc.reset()
     osc.init_dac()
 
-    ch = [osc1lite.ChannelInfo(0, 1000, .5, 1, n_pulses=i+1) for i in range(12)]
+    ch = [osc1lite.ChannelInfo(0, 1000, .2, .4, n_pulses=i, ext_trig=i%2)
+          for i in range(12)]
     for idx, data in enumerate(ch):
         osc.set_channel(idx, data)
 
     osc.enable_dac_output()
     for idx, data in enumerate(ch):
-        osc.trigger_channel(idx)
+        if data.ext_trig == 0:
+            osc.trigger_channel(idx)
+    while True:
+        time.sleep(1.5)
+        for idx, data in enumerate(ch):
+            if data.ext_trig == 0:
+                osc.trigger_channel(idx)
 
 
 if __name__ == '__main__':
