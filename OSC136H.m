@@ -220,16 +220,11 @@ classdef OSC136H < handle
             this.WriteToWireIn(5, 0, 16, convergent(wirein));
             this.WriteToWireIn(7, 0, 16, n_pulses);
             this.WriteToWireIn(6, 0, 16, bitor(bitor(mode, bitsll(channel-1, 4)), bitsll(ext_trigger, 9)));
-            pause(0.01);
             this.WriteToWireIn(6, 8, 1, 1);
-            pause(0.01);
             if ext_trigger == 0
                 this.WriteToWireIn(8, channel-1, 1, 0);
-                pause(0.1);
                 this.WriteToWireIn(8, channel-1, 1, 1);
-                pause(0.1);
                 this.WriteToWireIn(8, channel-1, 1, 0);
-                pause(0.1);
             end
         end
 
