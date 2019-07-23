@@ -7,7 +7,8 @@ import time
 
 
 class ChannelInfo:
-    def __init__(self, mode=0, amp=0, pw=0, period=10, n_pulses=1, ext_trig=0):
+    def __init__(self, mode=0, amp=0., pw=0., period=10., n_pulses=1,
+                 ext_trig=0):
         """
         mode controls the rising/falling edge width
         amp controls the wave amplitude
@@ -113,6 +114,8 @@ class OSC1Lite:
 
     def set_channel(self, channel, data: ChannelInfo):
         print('Sending params for channel', channel)
+        print('amp =', data.amp, ', pw =', data.pulse_width, ', period =',
+              data.period)
         word = round(data.pulse_width / (2 ** 11) * 13107200)
         word = 0 if word < 0 else 0xffff if word > 0xffff else word
         self._write_to_wire_in(0x03, word, update=False)
@@ -159,3 +162,18 @@ class OSC1Lite:
             channel_bit = 1 << ch
         self._write_to_wire_in(0x08, channel_bit, mask=channel_bit, update=True)
         self._write_to_wire_in(0x08, 0, mask=channel_bit, update=True)
+
+    def set_trigger_out(self, ch, enable=True):
+        print('trigger', ch)
+        channel_bit = 0
+        try:
+            for x in ch:
+                channel_bit |= 1 << x
+        except TypeError:
+            channel_bit = 1 << ch
+        self._write_to_wire_in(0x09, channel_bit if enable else 0,
+                               mask=channel_bit, update=True)
+
+    def get_channel_warnings(self):
+        self.dev.UpdateTriggerOuts()
+        return [i for i in range(16) if self.dev.IsTriggered(0x6a, 1 << i)]
