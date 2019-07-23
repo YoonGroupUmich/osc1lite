@@ -5,6 +5,7 @@ import threading
 import time
 import logging
 import os
+import matplotlib.pyplot as plt
 
 import ok
 import osc1lite
@@ -61,6 +62,7 @@ class SquareWavePanel(wx.FlexGridSizer):
 class WaveFormPanel(wx.StaticBoxSizer):
     def __init__(self, parent, label):
         wx.StaticBoxSizer.__init__(self, wx.VERTICAL, parent, label)
+        self.label = label
         common = wx.BoxSizer(wx.HORIZONTAL)
         waveform_type_choice = wx.Choice(parent, -1,
                                          choices=['Square Wave', 'Custom Wave'])
@@ -72,7 +74,10 @@ class WaveFormPanel(wx.StaticBoxSizer):
             LabeledCtrl(self.num_of_pulses, parent, -1, 'Number of Pulses'),
             0, wx.ALL, 3)
         common.AddStretchSpacer(1)
-        common.Add(wx.Button(parent, -1, 'Preview'), 0, wx.EXPAND | wx.ALL, 3)
+        preview_button = wx.Button(parent, -1, 'Preview')
+        preview_button.Bind(wx.EVT_BUTTON, self.on_preview)
+        common.Add(preview_button, 0, wx.EXPAND | wx.ALL, 3)
+
         common.Add(wx.Button(parent, -1, 'Delete'), 0, wx.EXPAND | wx.ALL, 3)
         self.Add(common, 0, wx.EXPAND)
         self.detail = SquareWavePanel(parent)
@@ -82,6 +87,14 @@ class WaveFormPanel(wx.StaticBoxSizer):
         ret = self.detail.channel_info()
         ret.n_pulses = self.num_of_pulses.GetValue()
         return ret
+
+    def on_preview(self, event: wx.Event):
+        plt.figure(num='Preview for ' + self.label)
+        plt.plot([0, 1], [0, 1])
+        plt.xlabel('time (s)')
+        plt.ylabel('amplitude (\u03bcA)')
+        plt.title('Preview is not working yet')
+        plt.show()
 
 
 class MainFrame(wx.Frame):
