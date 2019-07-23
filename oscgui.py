@@ -205,6 +205,7 @@ class MainFrame(wx.Frame):
 
             stop_button = wx.Button(p, -1, 'Stop Channel #%d' % i)
             stop_button.Enable(False)
+            stop_button.Bind(wx.EVT_BUTTON, self.on_stop)
             wrap_box = wx.BoxSizer(wx.HORIZONTAL)
             wrap_box.Add(stop_button, 1, wx.ALIGN_CENTER_VERTICAL)
             channel_box.Add(wrap_box, 0, wx.EXPAND)
@@ -262,6 +263,18 @@ class MainFrame(wx.Frame):
                 self.device.set_channel(ch, data)
                 if data.ext_trig == 0:
                     self.device.trigger_channel(ch)
+                break
+
+    def on_stop(self, event: wx.Event):
+        ident = event.GetId()
+        obj = event.GetEventObject()
+        assert isinstance(obj, wx.Button)
+        assert isinstance(self.device, osc1lite.OSC1Lite)
+        for ch, x in enumerate(self.channels_ui):
+            if ident == x.stop_button.GetId():
+                data = osc1lite.ChannelInfo()
+                self.device.set_channel(ch, data)
+                self.device.trigger_channel(ch)
                 break
 
     def on_connect(self, event: wx.Event):
