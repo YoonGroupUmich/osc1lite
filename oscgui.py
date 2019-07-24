@@ -138,8 +138,6 @@ class MainFrame(wx.Frame):
                     'device closed unexpectedly')
                 return
             warn = self.device.get_channel_warnings()
-            if warn:
-                print('!!!!!!!!!!!! WARN !!!!!!!!!!!!!!!!!!')
             for i in warn:
                 logging.getLogger('OSCGUI').warning(
                     'Overlapped trigger detected on channel %d' % i)
@@ -159,6 +157,7 @@ class MainFrame(wx.Frame):
         self.device_choice = wx.Choice(p, -1,
                                        choices=['[No connected devices]'])
         self.device_choice.SetSelection(0)
+        self.device_choice.SetSize(self.device_choice.GetBestSize())
         self.connect_button = wx.Button(p, -1, 'Connect')
         self.connect_button.Enable(False)
         self.connect_button.Bind(wx.EVT_BUTTON, self.on_connect)
@@ -196,10 +195,11 @@ class MainFrame(wx.Frame):
             wrap_box.Add(waveform_choice, 1, wx.ALIGN_CENTER_VERTICAL)
             channel_box.Add(wrap_box, 0, wx.EXPAND)
 
-            trigger_choice = wx.Choice(p, -1,
-                                       choices=['PC trigger',
-                                                'External trigger'])
+            trigger_choice = wx.Choice(p, -1, choices=['PC trigger',
+                                                       'External trigger'])
             trigger_choice.SetSelection(0)
+            trigger_choice.Bind(wx.EVT_CHOICE, self.on_trigger_choice)
+
             wrap_box = wx.BoxSizer(wx.HORIZONTAL)
             wrap_box.Add(trigger_choice, 1, wx.ALIGN_CENTER_VERTICAL)
             channel_box.Add(wrap_box, 0, wx.EXPAND)
@@ -237,10 +237,27 @@ class MainFrame(wx.Frame):
         self.Bind(wx.EVT_TOGGLEBUTTON, self.on_toggle)
         channel_panel.Add(channel_box, 1, wx.EXPAND)
 
+        right_box = wx.BoxSizer(wx.VERTICAL)
+        right_box.Add(channel_panel, 1, wx.EXPAND | wx.BOTTOM, 50)
+        self.log_text = wx.TextCtrl(p, -1,
+                                    style=wx.TE_MULTILINE | wx.TE_READONLY)
+        sh = logging.StreamHandler(self.log_text)
+        sh.setLevel(logging.INFO)
+        formatter = logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        sh.setFormatter(formatter)
+        logging.getLogger().addHandler(sh)
+        log_box = wx.StaticBoxSizer(wx.VERTICAL, p, 'Log')
+        log_box.Add(self.log_text, 1, wx.EXPAND)
+        clear_log_button = wx.Button(p, -1, 'Clear Log')
+        clear_log_button.Bind(wx.EVT_BUTTON, self.on_clear_log)
+        log_box.Add(clear_log_button, 0, wx.EXPAND)
+        right_box.Add(log_box, 1, wx.EXPAND)
+
         box = wx.BoxSizer(wx.HORIZONTAL)
         box.Add(left_box, 0, wx.ALL, 5)
         box.AddSpacer(50)
-        box.Add(channel_panel, 1, wx.EXPAND | wx.ALL, 5)
+        box.Add(right_box, 1, wx.EXPAND | wx.ALL, 5)
         p.SetSizer(box)
         box.Fit(p)
         self.Fit()
@@ -278,6 +295,17 @@ class MainFrame(wx.Frame):
                     self.device.trigger_channel(ch)
                 break
 
+    def on_trigger_choice(self, event: wx.Event):
+        ident = event.GetId()
+        obj = event.GetEventObject()
+        assert isinstance(obj, wx.Choice)
+        for ch, x in enumerate(self.channels_ui):
+            if ident == x.trigger_choice.GetId():
+                if obj.GetSelection() == 0:  # PC trigger
+                    x.trigger_button.SetLabel('Trigger Channel #%d' % ch)
+                else:
+                    x.trigger_button.SetLabel('Update Channel #%d' % ch)
+
     def on_stop(self, event: wx.Event):
         ident = event.GetId()
         obj = event.GetEventObject()
@@ -311,6 +339,7 @@ class MainFrame(wx.Frame):
             self.thread = threading.Thread(target=self.device_watcher,
                                            daemon=True)
             self.thread.start()
+            logging.getLogger('OSCGUI').info('Connected')
         else:
             self._dev.Close()
             self.device = None
@@ -326,6 +355,10 @@ class MainFrame(wx.Frame):
                 x.trigger_out_toggle.SetLabel('Trigger Out Disabled')
                 x.trigger_out_toggle.SetValue(False)
                 x.trigger_out_toggle.Enable(False)
+            logging.getLogger('OSCGUI').info('Disconnected')
+
+    def on_clear_log(self, event):
+        self.log_text.Clear()
 
 
 if __name__ == '__main__':
