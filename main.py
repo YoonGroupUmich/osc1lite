@@ -14,13 +14,13 @@ def main():
     dev = ok.okCFrontPanel()
 
     # Enumerate devices
-    deviceCount = dev.GetDeviceCount()
-    for i in range(deviceCount):
+    n_devices = dev.GetDeviceCount()
+    for i in range(n_devices):
         logging.debug(
             'Device[{0}] Model: {1}'.format(i, dev.GetDeviceListModel(i)))
         logging.debug(
             'Device[{0}] Serial: {1}'.format(i, dev.GetDeviceListSerial(i)))
-    assert deviceCount
+    assert n_devices
 
     # Open device
     dev.OpenBySerial("")
@@ -32,7 +32,8 @@ def main():
     osc.reset()
     osc.init_dac()
 
-    ch = [osc1lite.ChannelInfo(0, 1000, .2, .4, n_pulses=i, ext_trig=i%2)
+    ch = [osc1lite.ChannelInfo(osc1lite.SquareWaveform(0, 1000, .2, .4),
+                               n_pulses=i, ext_trig=i % 2)
           for i in range(12)]
     for idx, data in enumerate(ch):
         osc.set_channel(idx, data)

@@ -22,7 +22,7 @@ class LabeledCtrl(wx.BoxSizer):
         self.Add(control, 1, wx.EXPAND)
 
 
-class ChanneCtrl:
+class ChannelCtrl:
     def __init__(self, waveform_choice: wx.Choice, trigger_choice: wx.Choice,
                  continuous_toggle: wx.ToggleButton, trigger_button: wx.Button,
                  stop_button: wx.Button, trigger_out_toggle: wx.ToggleButton):
@@ -52,11 +52,33 @@ class SquareWavePanel(wx.FlexGridSizer):
         self.rise_time_text = wx.TextCtrl(parent, -1, '0')
         self.Add(self.rise_time_text, 0, wx.EXPAND)
 
-    def channel_info(self) -> osc1lite.ChannelInfo:
-        return osc1lite.ChannelInfo(amp=float(self.amp_text.GetValue()),
-                                    pw=float(self.pw_text.GetValue()) / 1000,
-                                    period=float(
-                                        self.period_text.GetValue()) / 1000)
+    def get_waveform(self) -> osc1lite.SquareWaveform:
+        rise_time = float(self.rise_time_text.GetValue())
+        mode = (0 if rise_time < .05 else
+                1 if rise_time < .3 else
+                2 if rise_time < .75 else 3 if rise_time < 1.5 else 4)
+        return osc1lite.SquareWaveform(amp=float(self.amp_text.GetValue()),
+                                       pw=float(self.pw_text.GetValue()) / 1000,
+                                       period=float(
+                                           self.period_text.GetValue()) / 1000,
+                                       mode=mode)
+
+
+class CustomWavePanel(wx.BoxSizer):
+    def __init__(self, parent):
+        wx.BoxSizer.__init__(self, wx.VERTICAL)
+        self.Add(wx.StaticText(parent, -1, 'Custom Waveform File'), 0, wx.EXPAND)
+        self.file_picker = wx.FilePickerCtrl(parent, -1, wildcard='*.cwave')
+        self.file_picker.Bind(wx.EVT_FILEPICKER_CHANGED, self.on_file)
+        self.Add(self.file_picker, 0, wx.EXPAND)
+        self.wave = []
+
+    def on_file(self, event: wx.Event):
+        with open(self.file_picker.GetPath()) as fp:
+            self.wave = [float(x) for x in fp.read().split()]
+
+    def get_waveform(self) -> osc1lite.CustomWaveform:
+        return osc1lite.CustomWaveform(self.wave)
 
 
 class WaveFormPanel(wx.StaticBoxSizer):
@@ -67,6 +89,7 @@ class WaveFormPanel(wx.StaticBoxSizer):
         waveform_type_choice = wx.Choice(parent, -1,
                                          choices=['Square Wave', 'Custom Wave'])
         waveform_type_choice.SetSelection(0)
+        waveform_type_choice.Bind(wx.EVT_CHOICE, self.on_type)
         common.Add(LabeledCtrl(waveform_type_choice, parent,
                                -1, 'Waveform Type'), 0, wx.ALL, 3)
         self.num_of_pulses = wx.SpinCtrl(parent, -1, min=1, max=0xffff)
@@ -80,21 +103,65 @@ class WaveFormPanel(wx.StaticBoxSizer):
 
         common.Add(wx.Button(parent, -1, 'Delete'), 0, wx.EXPAND | wx.ALL, 3)
         self.Add(common, 0, wx.EXPAND)
-        self.detail = SquareWavePanel(parent)
-        self.Add(self.detail, 0, wx.EXPAND | wx.ALL, 3)
+        self.p_square = SquareWavePanel(parent)
+        self.p_custom = CustomWavePanel(parent)
+        self.Add(self.p_square, 0, wx.EXPAND | wx.ALL, 3)
+        self.Add(self.p_custom, 0, wx.EXPAND | wx.ALL, 3)
+        self.Hide(self.p_custom)
+        # self.Layout()
+        self.detail = self.p_square
 
     def channel_info(self) -> osc1lite.ChannelInfo:
-        ret = self.detail.channel_info()
-        ret.n_pulses = self.num_of_pulses.GetValue()
-        return ret
+        wf = self.detail.get_waveform()
+        return osc1lite.ChannelInfo(wf, n_pulses=self.num_of_pulses.GetValue())
 
     def on_preview(self, event: wx.Event):
+        x_limit = 10
+        n_pulses = self.num_of_pulses.GetValue()
         plt.figure(num='Preview for ' + self.label)
-        plt.plot([0, 1], [0, 1])
+        wf = self.detail.get_waveform()
+        if isinstance(wf, osc1lite.SquareWaveform):
+            if wf.period <= 0:
+                xs = [0, x_limit]
+                ys = [0, 0]
+            else:
+                xs = [0]
+                ys = [0]
+                i = 0
+                while xs[-1] < x_limit and i < n_pulses:
+                    x_offset = xs[-1]
+                    rise_time = (0, 0.1, 0.5, 1, 2)[wf.mode]
+                    xs.extend([x_offset + rise_time,
+                               x_offset + wf.pulse_width - rise_time,
+                               x_offset + wf.pulse_width, x_offset + wf.period])
+                    ys.extend([wf.amp, wf.amp, 0, 0])
+                    i += 1
+                if xs[-1] < x_limit:
+                    xs.append(x_limit)
+                    ys.append(0)
+        elif isinstance(wf, osc1lite.CustomWaveform):
+            xs = range(len(wf.wave))
+            ys = wf.wave
+        else:
+            raise TypeError('Waveform type not supported')
+        plt.plot(xs, ys)
         plt.xlabel('time (s)')
         plt.ylabel('amplitude (\u03bcA)')
-        plt.title('Preview is not working yet')
         plt.show()
+
+    def on_type(self, event: wx.Event):
+        obj = event.GetEventObject()
+        assert isinstance(obj, wx.Choice)
+        if obj.GetSelection() == 0:  # Square Wave
+            self.Hide(self.p_custom)
+            self.Show(self.p_square)
+            self.Layout()
+            self.detail = self.p_square
+        else:
+            self.Hide(self.p_square)
+            self.Show(self.p_custom)
+            self.Layout()
+            self.detail = self.p_custom
 
 
 class MainFrame(wx.Frame):
@@ -230,8 +297,8 @@ class MainFrame(wx.Frame):
             channel_box.Add(wrap_box, 0, wx.EXPAND | wx.LEFT, 5)
 
             self.channels_ui.append(
-                ChanneCtrl(waveform_choice, trigger_choice, continuous_toggle,
-                           trigger_button, stop_button, trigger_out_toggle))
+                ChannelCtrl(waveform_choice, trigger_choice, continuous_toggle,
+                            trigger_button, stop_button, trigger_out_toggle))
 
             channel_box.AddGrowableRow(i, 1)
         self.Bind(wx.EVT_TOGGLEBUTTON, self.on_toggle)
@@ -313,7 +380,7 @@ class MainFrame(wx.Frame):
         assert isinstance(self.device, osc1lite.OSC1Lite)
         for ch, x in enumerate(self.channels_ui):
             if ident == x.stop_button.GetId():
-                data = osc1lite.ChannelInfo()
+                data = osc1lite.ChannelInfo(osc1lite.SquareWaveform())
                 self.device.set_channel(ch, data)
                 self.device.trigger_channel(ch)
                 break
