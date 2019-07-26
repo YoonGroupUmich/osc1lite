@@ -1,11 +1,12 @@
 #! /usr/bin/env python3.5
 
-import wx
+import logging
+import matplotlib.pyplot as plt
+import os
+import sys
 import threading
 import time
-import logging
-import os
-import matplotlib.pyplot as plt
+import wx
 
 import ok
 import osc1lite
@@ -25,13 +26,15 @@ class LabeledCtrl(wx.BoxSizer):
 class ChannelCtrl:
     def __init__(self, waveform_choice: wx.Choice, trigger_choice: wx.Choice,
                  continuous_toggle: wx.ToggleButton, trigger_button: wx.Button,
-                 stop_button: wx.Button, trigger_out_toggle: wx.ToggleButton):
+                 stop_button: wx.Button, trigger_out_toggle: wx.ToggleButton,
+                 status_text: wx.TextCtrl):
         self.waveform_choice = waveform_choice
         self.trigger_choice = trigger_choice
         self.continuous_toggle = continuous_toggle
         self.trigger_button = trigger_button
         self.stop_button = stop_button
         self.trigger_out_toggle = trigger_out_toggle
+        self.status_text = status_text
 
 
 class SquareWavePanel(wx.FlexGridSizer):
@@ -67,7 +70,8 @@ class SquareWavePanel(wx.FlexGridSizer):
 class CustomWavePanel(wx.BoxSizer):
     def __init__(self, parent):
         wx.BoxSizer.__init__(self, wx.VERTICAL)
-        self.Add(wx.StaticText(parent, -1, 'Custom Waveform File'), 0, wx.EXPAND)
+        self.Add(wx.StaticText(parent, -1, 'Custom Waveform File'), 0,
+                 wx.EXPAND)
         self.file_picker = wx.FilePickerCtrl(parent, -1, wildcard='*.cwave')
         self.file_picker.Bind(wx.EVT_FILEPICKER_CHANGED, self.on_file)
         self.Add(self.file_picker, 0, wx.EXPAND)
@@ -205,9 +209,35 @@ class MainFrame(wx.Frame):
                     'device closed unexpectedly')
                 return
             warn = self.device.get_channel_warnings()
-            for i in warn:
+            if warn['Trigger Overlap']:
                 logging.getLogger('OSCGUI').warning(
-                    'Overlapped trigger detected on channel %d' % i)
+                    'Trigger overlap detected on channel(s): %s',
+                    ', '.join(str(x) for x in warn['Trigger Overlap']))
+            channel_warnings = [[] for _ in range(12)]
+            for x, chs in warn.items():
+                for ch in chs:
+                    logging.getLogger('OSCGUI').debug(
+                        'Board reported: [Channel %d] %s' % (ch, x))
+                    if x != 'Trigger Overlap':
+                        channel_warnings[ch].append(x)
+            for ch, x in enumerate(channel_warnings):
+                target_color = wx.RED if x else wx.GREEN
+                if (target_color !=
+                        self.channels_ui[ch].status_text.GetBackgroundColour()):
+                    self.channels_ui[ch].status_text.SetBackgroundColour(
+                        target_color)
+                target_text = ', '.join(x) if x else 'Normal'
+                current_text = self.channels_ui[ch].status_text.GetValue()
+                if target_text != current_text:
+                    self.channels_ui[ch].status_text.SetValue(target_text)
+                if current_text == '':
+                    current_text = 'Normal'
+                if target_text != current_text:
+                    logging.getLogger('OSCGUI').log(
+                        level=logging.WARNING if target_color == wx.RED
+                        else logging.INFO,
+                        msg='Channel %d status: %s' % (ch, target_text))
+
             time.sleep(0.1)
 
     def __init__(self, parent=None, ident=-1):
@@ -246,10 +276,9 @@ class MainFrame(wx.Frame):
             left_box.Add(wf, 0, wx.EXPAND)
 
         channel_panel = wx.StaticBoxSizer(wx.VERTICAL, p)
-        channel_box = wx.FlexGridSizer(7, 5, 5)
+        channel_box = wx.FlexGridSizer(8, 5, 5)
         self.channels_ui = []
-        for i in range(1, 7):
-            channel_box.AddGrowableCol(i, 1)
+        channel_box.AddGrowableCol(7, 1)
         for i in range(12):
             channel_box.Add(wx.StaticText(p, -1, 'Channel %2d' % i),
                             0, wx.ALIGN_CENTER_VERTICAL)
@@ -296,9 +325,15 @@ class MainFrame(wx.Frame):
             wrap_box.Add(trigger_out_toggle, 1, wx.ALIGN_CENTER_VERTICAL)
             channel_box.Add(wrap_box, 0, wx.EXPAND | wx.LEFT, 5)
 
+            status_text = wx.TextCtrl(p, -1, style=wx.TE_READONLY)
+            wrap_box = wx.BoxSizer(wx.HORIZONTAL)
+            wrap_box.Add(status_text, 1, wx.ALIGN_CENTER_VERTICAL)
+            channel_box.Add(wrap_box, 0, wx.EXPAND | wx.LEFT, 5)
+
             self.channels_ui.append(
                 ChannelCtrl(waveform_choice, trigger_choice, continuous_toggle,
-                            trigger_button, stop_button, trigger_out_toggle))
+                            trigger_button, stop_button, trigger_out_toggle,
+                            status_text))
 
             channel_box.AddGrowableRow(i, 1)
         self.Bind(wx.EVT_TOGGLEBUTTON, self.on_toggle)
@@ -422,6 +457,9 @@ class MainFrame(wx.Frame):
                 x.trigger_out_toggle.SetLabel('Trigger Out Disabled')
                 x.trigger_out_toggle.SetValue(False)
                 x.trigger_out_toggle.Enable(False)
+                x.status_text.Clear()
+                x.status_text.SetBackgroundColour(wx.NullColour)
+                x.status_text.ClearBackground()
             logging.getLogger('OSCGUI').info('Disconnected')
 
     def on_clear_log(self, event):
@@ -431,4 +469,4 @@ class MainFrame(wx.Frame):
 if __name__ == '__main__':
     app = wx.App()
     MainFrame().Show()
-    exit(app.MainLoop())
+    sys.exit(app.MainLoop())

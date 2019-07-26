@@ -212,4 +212,23 @@ class OSC1Lite:
     def get_channel_warnings(self):
         with self.device_lock:
             self.dev.UpdateTriggerOuts()
-            return [i for i in range(16) if self.dev.IsTriggered(0x6a, 1 << i)]
+            ret = {
+                'Trigger Overlap': [i for i in range(16) if
+                                    self.dev.IsTriggered(0x6a, 1 << i)],
+                'DAC die temperature over 142 degC': [
+                    i for i in range(16) if self.dev.IsTriggered(
+                        0x6b + i // 3, 1 << (i % 3 * 5))],
+                'DAC code is slewing': [
+                    i for i in range(16) if self.dev.IsTriggered(
+                        0x6b + i // 3, 1 << (i % 3 * 5 + 1))],
+                'DAC open circuit or compliance voltage violation': [
+                    i for i in range(16) if self.dev.IsTriggered(
+                        0x6b + i // 3, 1 << (i % 3 * 5 + 2))],
+                'DAC watchdog timer timeout': [
+                    i for i in range(16) if self.dev.IsTriggered(
+                        0x6b + i // 3, 1 << (i % 3 * 5 + 3))],
+                'DAC SPI CRC error': [
+                    i for i in range(16) if self.dev.IsTriggered(
+                        0x6b + i // 3, 1 << (i % 3 * 5 + 4))]
+            }
+            return ret
