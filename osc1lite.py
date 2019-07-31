@@ -106,20 +106,33 @@ class OSC1Lite:
                 raise OSError('ConfigureFPGA() returned ' + str(ret))
 
             # Configure the PLL clock used by FPGA
+            # CLK = Ref / Q * P / div
+            # Constraint: Ref / Q >= 0.25 MHz, Ref / Q * P >= 100 MHz
             pll = ok.PLL22150()
+
+            #                 MHz
             pll.SetReference(48.0, False)
-            pll.SetVCOParameters(512, 125)
-            pll.SetDiv1(pll.DivSrc_VCO, 15)
+
+            #                     P    Q   P: [8, 2055], Q: [2, 129]
+            pll.SetVCOParameters(125, 12)
+            # pll.SetVCOParameters(512, 125)
+
+            #                          div  div: [4, 127]
+            pll.SetDiv1(pll.DivSrc_VCO, 67)
+            # pll.SetDiv1(pll.DivSrc_VCO, 15)
+
             pll.SetOutputSource(0, pll.ClkSrc_Div1ByN)
             pll.SetOutputEnable(0, True)
-            pll.SetDiv2(pll.DivSrc_VCO, 8)
-            pll.SetOutputSource(1, pll.ClkSrc_Div2ByN)
-            pll.SetOutputEnable(1, True)
+            # pll.SetDiv2(pll.DivSrc_VCO, 8)
+            # pll.SetOutputSource(1, pll.ClkSrc_Div2ByN)
+            # pll.SetOutputEnable(1, True)
             self.dev.SetPLL22150Configuration(pll)
             for i in range(2):
                 logging.getLogger('OSC1Lite.PLL').info(
                     'PLL output #{i} freq = {freq}MHz'.format(
                         i=i, freq=pll.GetOutputFrequency(i)))
+
+            self._freq = pll.GetOutputFrequency(0) * (10 ** 6)
 
         logging.getLogger('OSC1Lite').info('OSC1Lite configured.')
 
@@ -142,20 +155,22 @@ class OSC1Lite:
         logging.getLogger('OSC1Lite').debug(
             'Sending params for channel %d', channel)
         logging.getLogger('OSC1Lite').debug(
-            'amp=%f, pw=%f, period=%f', data.wf.amp, data.wf.pulse_width,
-            data.wf.period)
-        word = round(data.wf.pulse_width / (2 ** 11) * 13107200)
-        word_pw = 0 if word < 0 else 0xffff if word > 0xffff else word
-        word = round(data.wf.period / (2 ** 11) * 13107200)
-        word_period = 0 if word < 0 else 0xffff if word > 0xffff else word
-        word = round(
-            data.wf.amp / 24000 * 65536 / (1, 3, 13, 25, 50)[data.wf.mode])
+            'amp=%f, pw=%f, period=%f',
+            data.wf.amp, data.wf.pulse_width, data.wf.period)
+        word = round(data.wf.pulse_width / (2 ** 7) * self._freq)
+        word_pw = 0 if word < 0 else 0xffff if word > 0xfffff else word
+        word = round(data.wf.period / (2 ** 7) * self._freq)
+        word_period = 0 if word < 0 else 0xffff if word > 0xfffff else word
+        word = round(data.wf.amp / 24000 * 65536)
         word_amp = 0 if word < 0 else 0xffff if word > 0xffff else word
         with self.device_lock:
-            self._write_to_wire_in(0x03, word_pw, update=False)
-            self._write_to_wire_in(0x04, word_period, update=False)
+            self._write_to_wire_in(0x03, word_pw & 0xffff, update=False)
+            self._write_to_wire_in(0x04, word_period & 0xffff, update=False)
             self._write_to_wire_in(0x05, word_amp, update=False)
             self._write_to_wire_in(0x07, data.n_pulses, update=False)
+            self._write_to_wire_in(
+                0x0a, (word_pw >> 16) | ((word_period >> 8) & 0x0f00),
+                update=False)
             self._write_to_wire_in(
                 0x06, data.wf.mode | (channel << 4) | (data.ext_trig << 9),
                 update=True)
@@ -179,6 +194,11 @@ class OSC1Lite:
         with self.device_lock:
             self._write_to_wire_in(0x01, 5)
             self._write_to_wire_in(0x01, 3)
+            self._write_to_wire_in(0x01, 0)
+
+    def disable_dac(self):
+        with self.device_lock:
+            self._write_to_wire_in(0x01, 6)
             self._write_to_wire_in(0x01, 0)
 
     def enable_dac_output(self):
@@ -212,7 +232,7 @@ class OSC1Lite:
     def get_channel_warnings(self):
         with self.device_lock:
             self.dev.UpdateTriggerOuts()
-            ret = {
+            return {
                 'Trigger Overlap': [i for i in range(16) if
                                     self.dev.IsTriggered(0x6a, 1 << i)],
                 'DAC die temperature over 142 degC': [
@@ -231,4 +251,8 @@ class OSC1Lite:
                     i for i in range(16) if self.dev.IsTriggered(
                         0x6b + i // 3, 1 << (i % 3 * 5 + 4))]
             }
-            return ret
+
+    def status(self):
+        with self.device_lock:
+            self.dev.UpdateWireOuts()
+            return self.dev.GetWireOutValue(0x21)

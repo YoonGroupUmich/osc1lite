@@ -7,6 +7,7 @@ import sys
 import threading
 import time
 import wx
+import wx.lib.scrolledpanel
 
 import ok
 import osc1lite
@@ -88,32 +89,35 @@ class CustomWavePanel(wx.BoxSizer):
 class WaveFormPanel(wx.StaticBoxSizer):
     def __init__(self, parent, label):
         wx.StaticBoxSizer.__init__(self, wx.VERTICAL, parent, label)
+        p = self.GetStaticBox()
+        font = wx.Font(wx.FontInfo(10).Bold())
         self.label = label
         common = wx.BoxSizer(wx.HORIZONTAL)
-        waveform_type_choice = wx.Choice(parent, -1,
+        waveform_type_choice = wx.Choice(p, -1,
                                          choices=['Square Wave', 'Custom Wave'])
         waveform_type_choice.SetSelection(0)
         waveform_type_choice.Bind(wx.EVT_CHOICE, self.on_type)
-        common.Add(LabeledCtrl(waveform_type_choice, parent,
+        common.Add(LabeledCtrl(waveform_type_choice, p,
                                -1, 'Waveform Type'), 0, wx.ALL, 3)
-        self.num_of_pulses = wx.SpinCtrl(parent, -1, min=1, max=0xffff)
+        self.num_of_pulses = wx.SpinCtrl(p, -1, min=1, max=0xffff)
         common.Add(
-            LabeledCtrl(self.num_of_pulses, parent, -1, 'Number of Pulses'),
+            LabeledCtrl(self.num_of_pulses, p, -1, 'Number of Pulses'),
             0, wx.ALL, 3)
         common.AddStretchSpacer(1)
-        preview_button = wx.Button(parent, -1, 'Preview')
+        preview_button = wx.Button(p, -1, 'Preview')
         preview_button.Bind(wx.EVT_BUTTON, self.on_preview)
         common.Add(preview_button, 0, wx.EXPAND | wx.ALL, 3)
-
-        common.Add(wx.Button(parent, -1, 'Delete'), 0, wx.EXPAND | wx.ALL, 3)
+        self.delete_button = wx.Button(p, -1, 'Delete')
+        common.Add(self.delete_button, 0, wx.EXPAND | wx.ALL, 3)
         self.Add(common, 0, wx.EXPAND)
-        self.p_square = SquareWavePanel(parent)
-        self.p_custom = CustomWavePanel(parent)
+        self.p_square = SquareWavePanel(p)
+        self.p_custom = CustomWavePanel(p)
         self.Add(self.p_square, 0, wx.EXPAND | wx.ALL, 3)
         self.Add(self.p_custom, 0, wx.EXPAND | wx.ALL, 3)
         self.Hide(self.p_custom)
         # self.Layout()
         self.detail = self.p_square
+        p.SetFont(font)
 
     def channel_info(self) -> osc1lite.ChannelInfo:
         wf = self.detail.get_waveform()
@@ -122,7 +126,7 @@ class WaveFormPanel(wx.StaticBoxSizer):
     def on_preview(self, event: wx.Event):
         x_limit = 10
         n_pulses = self.num_of_pulses.GetValue()
-        plt.figure(num='Preview for ' + self.label)
+        plt.figure(num='Waveform Preview')
         wf = self.detail.get_waveform()
         if isinstance(wf, osc1lite.SquareWaveform):
             if wf.period <= 0:
@@ -131,26 +135,24 @@ class WaveFormPanel(wx.StaticBoxSizer):
             else:
                 xs = [0]
                 ys = [0]
-                i = 0
-                while xs[-1] < x_limit and i < n_pulses:
+                for i in range(n_pulses):
                     x_offset = xs[-1]
                     rise_time = (0, 0.1, 0.5, 1, 2)[wf.mode]
-                    xs.extend([x_offset + rise_time,
-                               x_offset + wf.pulse_width - rise_time,
-                               x_offset + wf.pulse_width, x_offset + wf.period])
-                    ys.extend([wf.amp, wf.amp, 0, 0])
-                    i += 1
-                if xs[-1] < x_limit:
-                    xs.append(x_limit)
-                    ys.append(0)
+                    xs.extend((x_offset + rise_time,
+                               x_offset + wf.pulse_width * 1000 - rise_time,
+                               x_offset + wf.pulse_width * 1000,
+                               x_offset + wf.period * 1000))
+                    ys.extend((wf.amp, wf.amp, 0, 0))
         elif isinstance(wf, osc1lite.CustomWaveform):
             xs = range(len(wf.wave))
             ys = wf.wave
         else:
             raise TypeError('Waveform type not supported')
-        plt.plot(xs, ys)
-        plt.xlabel('time (s)')
+        print(xs, ys)
+        plt.plot(xs, ys, label=self.label)
+        plt.xlabel('time (ms)')
         plt.ylabel('amplitude (\u03bcA)')
+        plt.legend()
         plt.show()
 
     def on_type(self, event: wx.Event):
@@ -166,6 +168,63 @@ class WaveFormPanel(wx.StaticBoxSizer):
             self.Show(self.p_custom)
             self.Layout()
             self.detail = self.p_custom
+
+
+class WaveformManager(wx.ScrolledWindow):
+    def __init__(self, parent, mf, ident=-1):
+        wx.ScrolledWindow.__init__(self, parent, ident,
+                                   style=wx.VSCROLL | wx.ALWAYS_SHOW_SB)
+        self.box = wx.BoxSizer(wx.VERTICAL)
+
+        new_wf = wx.Button(self, -1, 'Add New Waveform')
+        new_wf.Bind(wx.EVT_BUTTON, self.on_new_wf)
+        self.box.Add(new_wf, 0, wx.ALIGN_RIGHT)
+
+        self.cnt = 4
+        self.waveform_panels = [WaveFormPanel(self, 'Waveform %d' % (x + 1))
+                                for x in range(self.cnt)]
+        for wf in self.waveform_panels:
+            self.box.Add(wf, 0, wx.EXPAND | wx.TOP | wx.BOTTOM, 5)
+
+        self.SetSizerAndFit(self.box)
+        # self.box.SetSizeHints(self)
+        self.SetScrollRate(5, 5)
+
+        self.Bind(wx.EVT_BUTTON, self.on_delete)
+        self.parent = parent
+        self.mf = mf
+
+    def on_delete(self, event: wx.Event):
+        ident = event.GetId()
+        obj = event.GetEventObject()
+        assert isinstance(obj, wx.Button)
+        for idx, x in enumerate(self.waveform_panels):
+            if ident == x.delete_button.GetId():
+                ch = self.mf.is_wf_using(x.label)
+                if ch != -1:
+                    wx.MessageBox(
+                        'Cannot delete waveform.\n'
+                        'Waveform is being used by channel %d.' % ch,
+                        'Error', wx.ICON_ERROR | wx.OK | wx.CENTRE, self.mf)
+                    return
+                self.parent.Freeze()
+                del self.waveform_panels[idx]
+                self.box.Hide(x)
+                break
+        self.mf.update_wf_list()
+        self.parent.Layout()
+        self.parent.Thaw()
+
+    def on_new_wf(self, event: wx.Event):
+        self.parent.Freeze()
+        self.cnt += 1
+        wf = WaveFormPanel(self, 'Waveform %d' % self.cnt)
+        self.waveform_panels.append(wf)
+        self.box.Add(wf, 0, wx.EXPAND | wx.TOP | wx.BOTTOM, 5)
+        self.box.SetSizeHints(self)
+        self.mf.update_wf_list()
+        self.parent.Layout()
+        self.parent.Thaw()
 
 
 class MainFrame(wx.Frame):
@@ -195,24 +254,29 @@ class MainFrame(wx.Frame):
                     self.device_choice.SetSelection(sel)
                     self.connect_button.Enable(True)
                 else:
-                    self.device_choice.Set(['[No connected devices]'])
+                    self.device_choice.Set(['[No connected device]'])
                     self.device_choice.SetSelection(0)
                     self.connect_button.Enable(False)
-            time.sleep(0.1)
+            time.sleep(5)
 
     def device_watcher(self) -> None:
         logging.getLogger('OSCGUI').debug('device_watcher started')
         while self.device is not None:
             assert isinstance(self.device, osc1lite.OSC1Lite)
             if not self._dev.IsOpen():
-                logging.getLogger('OSCGUI').warning(
+                logging.getLogger('OSCGUI').error(
                     'device closed unexpectedly')
                 return
             warn = self.device.get_channel_warnings()
-            if warn['Trigger Overlap']:
+            status = self.device.status()
+            overlap = [x for x in warn['Trigger Overlap'] if
+                       self.channels_ui[x].trigger_choice.GetSelection() == 1 or
+                       not self.channels_ui[x].continuous_toggle.GetValue()]
+            if overlap:
                 logging.getLogger('OSCGUI').warning(
-                    'Trigger overlap detected on channel(s): %s',
-                    ', '.join(str(x) for x in warn['Trigger Overlap']))
+                    'Waveform restarted due to '
+                    'asynchronous trigger on channel(s): %s',
+                    ', '.join(str(x) for x in overlap))
             channel_warnings = [[] for _ in range(12)]
             for x, chs in warn.items():
                 for ch in chs:
@@ -221,21 +285,24 @@ class MainFrame(wx.Frame):
                     if x != 'Trigger Overlap':
                         channel_warnings[ch].append(x)
             for ch, x in enumerate(channel_warnings):
-                target_color = wx.RED if x else wx.GREEN
+                target_color = (
+                    wx.Colour(255, 172, 174) if x
+                    else wx.Colour(0, 243, 243) if status & (1 << ch)
+                    else wx.Colour(206, 206, 0))
                 if (target_color !=
                         self.channels_ui[ch].status_text.GetBackgroundColour()):
                     self.channels_ui[ch].status_text.SetBackgroundColour(
                         target_color)
-                target_text = ', '.join(x) if x else 'Normal'
+                target_text = (', '.join(x) if x else
+                               'Normal' if status & (1 << ch) else 'Stopped')
                 current_text = self.channels_ui[ch].status_text.GetValue()
                 if target_text != current_text:
                     self.channels_ui[ch].status_text.SetValue(target_text)
-                if current_text == '':
-                    current_text = 'Normal'
-                if target_text != current_text:
+                if target_text != current_text != 'Board not connected':
                     logging.getLogger('OSCGUI').log(
-                        level=logging.WARNING if target_color == wx.RED
-                        else logging.INFO,
+                        level=(logging.WARNING
+                               if target_color != wx.Colour(0, 243, 243)
+                               else logging.INFO),
                         msg='Channel %d status: %s' % (ch, target_text))
 
             time.sleep(0.1)
@@ -252,7 +319,7 @@ class MainFrame(wx.Frame):
         # Setup frame
         setup_sizer = wx.StaticBoxSizer(wx.HORIZONTAL, p, 'Setup')
         self.device_choice = wx.Choice(p, -1,
-                                       choices=['[No connected devices]'])
+                                       choices=['[No connected device]'])
         self.device_choice.SetSelection(0)
         self.device_choice.SetSize(self.device_choice.GetBestSize())
         self.connect_button = wx.Button(p, -1, 'Connect')
@@ -270,10 +337,8 @@ class MainFrame(wx.Frame):
         left_box.Add(setup_sizer, 0, wx.EXPAND)
         left_box.AddSpacer(50)
 
-        self.waveform_panels = [WaveFormPanel(p, 'Waveform %d' % (x + 1))
-                                for x in range(4)]
-        for wf in self.waveform_panels:
-            left_box.Add(wf, 0, wx.EXPAND)
+        self.wfm = WaveformManager(p, self)
+        left_box.Add(self.wfm, 1, wx.EXPAND)
 
         channel_panel = wx.StaticBoxSizer(wx.VERTICAL, p)
         channel_box = wx.FlexGridSizer(8, 5, 5)
@@ -325,7 +390,8 @@ class MainFrame(wx.Frame):
             wrap_box.Add(trigger_out_toggle, 1, wx.ALIGN_CENTER_VERTICAL)
             channel_box.Add(wrap_box, 0, wx.EXPAND | wx.LEFT, 5)
 
-            status_text = wx.TextCtrl(p, -1, style=wx.TE_READONLY)
+            status_text = wx.TextCtrl(p, -1, 'Board not connected',
+                                      style=wx.TE_READONLY)
             wrap_box = wx.BoxSizer(wx.HORIZONTAL)
             wrap_box.Add(status_text, 1, wx.ALIGN_CENTER_VERTICAL)
             channel_box.Add(wrap_box, 0, wx.EXPAND | wx.LEFT, 5)
@@ -357,11 +423,11 @@ class MainFrame(wx.Frame):
         right_box.Add(log_box, 1, wx.EXPAND)
 
         box = wx.BoxSizer(wx.HORIZONTAL)
-        box.Add(left_box, 0, wx.ALL, 5)
+        box.Add(left_box, 0, wx.EXPAND | wx.ALL, 5)
         box.AddSpacer(50)
         box.Add(right_box, 1, wx.EXPAND | wx.ALL, 5)
-        p.SetSizer(box)
-        box.Fit(p)
+        p.SetSizerAndFit(box)
+        # box.SetSizeHints(p)
         self.Fit()
 
     def on_toggle(self, event: wx.Event):
@@ -388,7 +454,7 @@ class MainFrame(wx.Frame):
         for ch, x in enumerate(self.channels_ui):
             if ident == x.trigger_button.GetId():
                 wf = x.waveform_choice.GetSelection()
-                data = self.waveform_panels[wf].channel_info()
+                data = self.wfm.waveform_panels[wf].channel_info()
                 data.ext_trig = x.trigger_choice.GetSelection()
                 if x.continuous_toggle.GetValue():
                     data.n_pulses = 0
@@ -418,10 +484,12 @@ class MainFrame(wx.Frame):
                 data = osc1lite.ChannelInfo(osc1lite.SquareWaveform())
                 self.device.set_channel(ch, data)
                 self.device.trigger_channel(ch)
+                # self.device._write_to_wire_in(0x02, 1, 0x01)
                 break
 
     def on_connect(self, event: wx.Event):
-        if self.device is None:
+        if self.connect_button.GetLabel() == 'Connect':
+            assert(self.device is None)
             self.device_choice.Enable(False)
             self._dev.OpenBySerial(self.device_choice.GetString(
                 self.device_choice.GetSelection()))
@@ -443,6 +511,7 @@ class MainFrame(wx.Frame):
             self.thread.start()
             logging.getLogger('OSCGUI').info('Connected')
         else:
+            self.device.disable_dac()
             self._dev.Close()
             self.device = None
             self.thread.join()
@@ -457,13 +526,26 @@ class MainFrame(wx.Frame):
                 x.trigger_out_toggle.SetLabel('Trigger Out Disabled')
                 x.trigger_out_toggle.SetValue(False)
                 x.trigger_out_toggle.Enable(False)
-                x.status_text.Clear()
                 x.status_text.SetBackgroundColour(wx.NullColour)
-                x.status_text.ClearBackground()
+                x.status_text.SetValue('Board not connected')
             logging.getLogger('OSCGUI').info('Disconnected')
 
     def on_clear_log(self, event):
         self.log_text.Clear()
+
+    def is_wf_using(self, waveform: str):
+        for ch, x in enumerate(self.channels_ui):
+            wf = x.waveform_choice.GetString(x.waveform_choice.GetSelection())
+            if waveform == wf:
+                return ch
+        return -1
+
+    def update_wf_list(self):
+        wfs = [x.label for x in self.wfm.waveform_panels]
+        for x in self.channels_ui:
+            wf = x.waveform_choice.GetString(x.waveform_choice.GetSelection())
+            x.waveform_choice.Set(wfs)
+            x.waveform_choice.SetSelection(wfs.index(wf))
 
 
 if __name__ == '__main__':
