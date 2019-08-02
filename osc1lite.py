@@ -1,4 +1,5 @@
 #! /usr/bin/env python
+import time
 
 import ok
 import hashlib
@@ -197,8 +198,10 @@ class OSC1Lite:
             self._write_to_wire_in(0x01, 0)
 
     def disable_dac(self):
+        logging.getLogger('OSC1Lite').debug('Disable DAC')
         with self.device_lock:
             self._write_to_wire_in(0x01, 6)
+            time.sleep(0.1)
             self._write_to_wire_in(0x01, 0)
 
     def enable_dac_output(self):

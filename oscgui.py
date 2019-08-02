@@ -27,14 +27,14 @@ class LabeledCtrl(wx.BoxSizer):
 class ChannelCtrl:
     def __init__(self, waveform_choice: wx.Choice, trigger_choice: wx.Choice,
                  continuous_toggle: wx.ToggleButton, trigger_button: wx.Button,
-                 stop_button: wx.Button, trigger_out_toggle: wx.ToggleButton,
+                 stop_button: wx.Button, trigger_out_check: wx.CheckBox,
                  status_text: wx.TextCtrl):
         self.waveform_choice = waveform_choice
         self.trigger_choice = trigger_choice
         self.continuous_toggle = continuous_toggle
         self.trigger_button = trigger_button
         self.stop_button = stop_button
-        self.trigger_out_toggle = trigger_out_toggle
+        self.trigger_out_check = trigger_out_check
         self.status_text = status_text
 
 
@@ -104,11 +104,11 @@ class WaveFormPanel(wx.StaticBoxSizer):
             LabeledCtrl(self.num_of_pulses, p, -1, 'Number of Pulses'),
             0, wx.ALL, 3)
         common.AddStretchSpacer(1)
-        preview_button = wx.Button(p, -1, 'Preview')
+        preview_button = wx.Button(p, -1, 'Preview', style=wx.BU_EXACTFIT)
         preview_button.Bind(wx.EVT_BUTTON, self.on_preview)
-        common.Add(preview_button, 0, wx.EXPAND | wx.ALL, 3)
-        self.delete_button = wx.Button(p, -1, 'Delete')
-        common.Add(self.delete_button, 0, wx.EXPAND | wx.ALL, 3)
+        common.Add(preview_button, 0, wx.ALIGN_TOP | wx.ALL, 3)
+        self.delete_button = wx.Button(p, -1, 'X', style=wx.BU_EXACTFIT)
+        common.Add(self.delete_button, 0, wx.ALIGN_TOP | wx.ALL, 3)
         self.Add(common, 0, wx.EXPAND)
         self.p_square = SquareWavePanel(p)
         self.p_custom = CustomWavePanel(p)
@@ -126,7 +126,7 @@ class WaveFormPanel(wx.StaticBoxSizer):
     def on_preview(self, event: wx.Event):
         x_limit = 10
         n_pulses = self.num_of_pulses.GetValue()
-        plt.figure(num='Waveform Preview')
+        plt.figure(num='Preview for ' + self.label)
         wf = self.detail.get_waveform()
         if isinstance(wf, osc1lite.SquareWaveform):
             if wf.period <= 0:
@@ -152,7 +152,6 @@ class WaveFormPanel(wx.StaticBoxSizer):
         plt.plot(xs, ys, label=self.label)
         plt.xlabel('time (ms)')
         plt.ylabel('amplitude (\u03bcA)')
-        plt.legend()
         plt.show()
 
     def on_type(self, event: wx.Event):
@@ -229,6 +228,8 @@ class WaveformManager(wx.ScrolledWindow):
 
 class MainFrame(wx.Frame):
 
+    daemon_lock = threading.RLock()
+
     def device_lister(self) -> None:
         logging.getLogger('OSCGUI').debug('device_lister started')
         while self.device is None:
@@ -252,12 +253,12 @@ class MainFrame(wx.Frame):
                     except ValueError:
                         sel = 0
                     self.device_choice.SetSelection(sel)
-                    self.connect_button.Enable(True)
+                    self.connect_button.Enable()
                 else:
                     self.device_choice.Set(['[No connected device]'])
                     self.device_choice.SetSelection(0)
-                    self.connect_button.Enable(False)
-            time.sleep(5)
+                    self.connect_button.Disable()
+            time.sleep(0.1)
 
     def device_watcher(self) -> None:
         logging.getLogger('OSCGUI').debug('device_watcher started')
@@ -323,7 +324,7 @@ class MainFrame(wx.Frame):
         self.device_choice.SetSelection(0)
         self.device_choice.SetSize(self.device_choice.GetBestSize())
         self.connect_button = wx.Button(p, -1, 'Connect')
-        self.connect_button.Enable(False)
+        self.connect_button.Disable()
         self.connect_button.Bind(wx.EVT_BUTTON, self.on_connect)
         self.thread = threading.Thread(target=self.device_lister, daemon=True)
         self.thread.start()
@@ -342,6 +343,16 @@ class MainFrame(wx.Frame):
 
         channel_panel = wx.StaticBoxSizer(wx.VERTICAL, p)
         channel_box = wx.FlexGridSizer(8, 5, 5)
+        channel_box.Add(wx.StaticText(p, -1, 'Channel #'), 0, wx.ALIGN_CENTER)
+        channel_box.Add(wx.StaticText(p, -1, 'Waveform'), 0, wx.ALIGN_CENTER)
+        channel_box.Add(wx.StaticText(p, -1, 'Trigger Source'), 0,
+                        wx.ALIGN_CENTER)
+        channel_box.Add(wx.StaticText(p, -1, 'Trigger Mode'), 0,
+                        wx.ALIGN_CENTER)
+        channel_box.Add(wx.StaticText(p, -1, 'PC Trigger'), 0, wx.ALIGN_CENTER)
+        channel_box.AddSpacer(0)
+        channel_box.Add(wx.StaticText(p, -1, 'Trigger Out'), 0, wx.ALIGN_CENTER)
+        channel_box.Add(wx.StaticText(p, -1, 'Status'), 0, wx.ALIGN_CENTER)
         self.channels_ui = []
         channel_box.AddGrowableCol(7, 1)
         for i in range(12):
@@ -370,25 +381,24 @@ class MainFrame(wx.Frame):
             wrap_box.Add(continuous_toggle, 1, wx.ALIGN_CENTER_VERTICAL)
             channel_box.Add(wrap_box, 0, wx.EXPAND)
 
-            trigger_button = wx.Button(p, -1, 'Trigger Channel #%d' % i)
-            trigger_button.Enable(False)
+            trigger_button = wx.Button(p, -1, 'Trigger')
+            trigger_button.Disable()
             trigger_button.Bind(wx.EVT_BUTTON, self.on_trigger)
             wrap_box = wx.BoxSizer(wx.HORIZONTAL)
             wrap_box.Add(trigger_button, 1, wx.ALIGN_CENTER_VERTICAL)
             channel_box.Add(wrap_box, 0, wx.EXPAND)
 
-            stop_button = wx.Button(p, -1, 'Stop Channel #%d' % i)
-            stop_button.Enable(False)
+            stop_button = wx.Button(p, -1, 'Disable')
+            stop_button.Disable()
             stop_button.Bind(wx.EVT_BUTTON, self.on_stop)
             wrap_box = wx.BoxSizer(wx.HORIZONTAL)
             wrap_box.Add(stop_button, 1, wx.ALIGN_CENTER_VERTICAL)
             channel_box.Add(wrap_box, 0, wx.EXPAND)
 
-            trigger_out_toggle = wx.ToggleButton(p, -1, 'Trigger Out Disabled')
-            trigger_out_toggle.Enable(False)
-            wrap_box = wx.BoxSizer(wx.HORIZONTAL)
-            wrap_box.Add(trigger_out_toggle, 1, wx.ALIGN_CENTER_VERTICAL)
-            channel_box.Add(wrap_box, 0, wx.EXPAND | wx.LEFT, 5)
+            trigger_out_check = wx.CheckBox(p, -1)
+            trigger_out_check.Disable()
+            trigger_out_check.Bind(wx.EVT_CHECKBOX, self.on_trigger_out)
+            channel_box.Add(trigger_out_check, 0, wx.ALIGN_CENTER)
 
             status_text = wx.TextCtrl(p, -1, 'Board not connected',
                                       style=wx.TE_READONLY)
@@ -398,7 +408,7 @@ class MainFrame(wx.Frame):
 
             self.channels_ui.append(
                 ChannelCtrl(waveform_choice, trigger_choice, continuous_toggle,
-                            trigger_button, stop_button, trigger_out_toggle,
+                            trigger_button, stop_button, trigger_out_check,
                             status_text))
 
             channel_box.AddGrowableRow(i, 1)
@@ -439,11 +449,15 @@ class MainFrame(wx.Frame):
                 obj.SetLabel('Continuous Mode' if obj.GetValue()
                              else 'One-shot Mode')
                 break
-            elif ident == x.trigger_out_toggle.GetId():
+
+    def on_trigger_out(self, event: wx.Event):
+        ident = event.GetId()
+        obj = event.GetEventObject()
+        assert isinstance(obj, wx.CheckBox)
+        for ch, x in enumerate(self.channels_ui):
+            if ident == x.trigger_out_check.GetId():
                 assert isinstance(self.device, osc1lite.OSC1Lite)
-                self.device.set_trigger_out(ch, x.trigger_out_toggle.GetValue())
-                obj.SetLabel('Trigger Out Enabled' if obj.GetValue()
-                             else 'Trigger Out Disabled')
+                self.device.set_trigger_out(ch, x.trigger_out_check.GetValue())
                 break
 
     def on_trigger(self, event: wx.Event):
@@ -470,9 +484,9 @@ class MainFrame(wx.Frame):
         for ch, x in enumerate(self.channels_ui):
             if ident == x.trigger_choice.GetId():
                 if obj.GetSelection() == 0:  # PC trigger
-                    x.trigger_button.SetLabel('Trigger Channel #%d' % ch)
+                    x.trigger_button.Enable()
                 else:
-                    x.trigger_button.SetLabel('Update Channel #%d' % ch)
+                    x.trigger_button.Disable()
 
     def on_stop(self, event: wx.Event):
         ident = event.GetId()
@@ -489,8 +503,8 @@ class MainFrame(wx.Frame):
 
     def on_connect(self, event: wx.Event):
         if self.connect_button.GetLabel() == 'Connect':
-            assert(self.device is None)
-            self.device_choice.Enable(False)
+            assert (self.device is None)
+            self.device_choice.Disable()
             self._dev.OpenBySerial(self.device_choice.GetString(
                 self.device_choice.GetSelection()))
             self.device = osc1lite.OSC1Lite(self._dev)
@@ -503,9 +517,9 @@ class MainFrame(wx.Frame):
             self.connect_button.SetLabel('Disconnect')
 
             for x in self.channels_ui:
-                x.trigger_button.Enable(True)
-                x.stop_button.Enable(True)
-                x.trigger_out_toggle.Enable(True)
+                x.trigger_button.Enable()
+                x.stop_button.Enable()
+                x.trigger_out_check.Enable()
             self.thread = threading.Thread(target=self.device_watcher,
                                            daemon=True)
             self.thread.start()
@@ -518,19 +532,18 @@ class MainFrame(wx.Frame):
             self.thread = threading.Thread(target=self.device_lister,
                                            daemon=True)
             self.thread.start()
-            self.device_choice.Enable(True)
+            self.device_choice.Enable()
             self.connect_button.SetLabel('Connect')
             for x in self.channels_ui:
-                x.trigger_button.Enable(False)
-                x.stop_button.Enable(False)
-                x.trigger_out_toggle.SetLabel('Trigger Out Disabled')
-                x.trigger_out_toggle.SetValue(False)
-                x.trigger_out_toggle.Enable(False)
+                x.trigger_button.Disable()
+                x.stop_button.Disable()
+                x.trigger_out_check.SetValue(False)
+                x.trigger_out_check.Disable()
                 x.status_text.SetBackgroundColour(wx.NullColour)
                 x.status_text.SetValue('Board not connected')
             logging.getLogger('OSCGUI').info('Disconnected')
 
-    def on_clear_log(self, event):
+    def on_clear_log(self, event: wx.Event):
         self.log_text.Clear()
 
     def is_wf_using(self, waveform: str):
