@@ -49,12 +49,16 @@ class SquareWavePanel(wx.FlexGridSizer):
         self.Add(wx.StaticText(parent, -1, 'Rise Time (ms)'), 0, wx.EXPAND)
         self.amp_text = wx.TextCtrl(parent, -1, '2000')
         self.Add(self.amp_text, 0, wx.EXPAND)
+        self.amp_text.Bind(wx.EVT_TEXT, self.on_text)
         self.pw_text = wx.TextCtrl(parent, -1, '100')
         self.Add(self.pw_text, 0, wx.EXPAND)
+        self.pw_text.Bind(wx.EVT_TEXT, self.on_text)
         self.period_text = wx.TextCtrl(parent, -1, '200')
         self.Add(self.period_text, 0, wx.EXPAND)
+        self.period_text.Bind(wx.EVT_TEXT, self.on_text)
         self.rise_time_text = wx.TextCtrl(parent, -1, '0')
         self.Add(self.rise_time_text, 0, wx.EXPAND)
+        self.rise_time_text.Bind(wx.EVT_TEXT, self.on_text)
 
     def get_waveform(self) -> osc1lite.SquareWaveform:
         rise_time = float(self.rise_time_text.GetValue())
@@ -66,6 +70,9 @@ class SquareWavePanel(wx.FlexGridSizer):
                                        period=float(
                                            self.period_text.GetValue()) / 1000,
                                        mode=mode)
+
+    def on_text(self, event: wx.Event):
+        ...
 
 
 class CustomWavePanel(wx.BoxSizer):
@@ -93,8 +100,8 @@ class WaveFormPanel(wx.StaticBoxSizer):
         font = wx.Font(wx.FontInfo(10).Bold())
         self.label = label
         common = wx.BoxSizer(wx.HORIZONTAL)
-        waveform_type_choice = wx.Choice(p, -1,
-                                         choices=['Square Wave', 'Custom Wave'])
+        waveform_type_choice = wx.Choice(p, -1, choices=['Square Wave'])
+        #                                choices=['Square Wave', 'Custom Wave'])
         waveform_type_choice.SetSelection(0)
         waveform_type_choice.Bind(wx.EVT_CHOICE, self.on_type)
         common.Add(LabeledCtrl(waveform_type_choice, p,
@@ -108,6 +115,7 @@ class WaveFormPanel(wx.StaticBoxSizer):
         preview_button.Bind(wx.EVT_BUTTON, self.on_preview)
         common.Add(preview_button, 0, wx.ALIGN_TOP | wx.ALL, 3)
         self.delete_button = wx.Button(p, -1, 'X', style=wx.BU_EXACTFIT)
+        self.delete_button.SetToolTip(wx.ToolTip('Delete waveform'))
         common.Add(self.delete_button, 0, wx.ALIGN_TOP | wx.ALL, 3)
         self.Add(common, 0, wx.EXPAND)
         self.p_square = SquareWavePanel(p)
@@ -496,10 +504,12 @@ class MainFrame(wx.Frame):
         assert isinstance(self.device, osc1lite.OSC1Lite)
         for ch, x in enumerate(self.channels_ui):
             if ident == x.stop_button.GetId():
-                data = osc1lite.ChannelInfo(osc1lite.SquareWaveform())
-                self.device.set_channel(ch, data)
-                self.device.trigger_channel(ch)
-                # self.device._write_to_wire_in(0x02, 1, 0x01)
+                if obj.GetLabel() == 'Enable':
+                    self.device.set_enable(ch, True)
+                    obj.SetLabel('Disable')
+                else:
+                    self.device.set_enable(ch, False)
+                    obj.SetLabel('Enable')
                 break
 
     def on_connect(self, event: wx.Event):

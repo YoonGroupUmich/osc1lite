@@ -232,6 +232,19 @@ class OSC1Lite:
             self._write_to_wire_in(0x09, channel_bit if enable else 0,
                                    mask=channel_bit, update=True)
 
+    def set_enable(self, ch, enable=True):
+        logging.getLogger('OSC1Lite').debug('%sabling channel %s',
+                                            'En' if enable else 'Dis', str(ch))
+        channel_bit = 0
+        try:
+            for x in ch:
+                channel_bit |= 1 << x
+        except TypeError:
+            channel_bit = 1 << ch
+        with self.device_lock:
+            self._write_to_wire_in(0x0b, channel_bit if enable else 0,
+                                   mask=channel_bit, update=True)
+
     def get_channel_warnings(self):
         with self.device_lock:
             self.dev.UpdateTriggerOuts()
