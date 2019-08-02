@@ -227,86 +227,88 @@ class WaveformManager(wx.ScrolledWindow):
 
 
 class MainFrame(wx.Frame):
-
     daemon_lock = threading.RLock()
 
-    def device_lister(self) -> None:
-        logging.getLogger('OSCGUI').debug('device_lister started')
-        while self.device is None:
-            devices = {}
-            for i in range(self._dev.GetDeviceCount()):
-                model = self._dev.GetDeviceListModel(i)
-                serial = self._dev.GetDeviceListSerial(i)
-                if model and serial:
-                    devices[serial] = model
+    def daemon(self) -> None:
+        logging.getLogger('OSCGUI').debug('daemon started')
+        while True:
+            with self.daemon_lock:
+                if self.device is None:
+                    self.device_lister()
                 else:
-                    break
-            if devices != self.devices:
-                self.devices = devices
-                curr = self.device_choice.GetString(
-                    self.device_choice.GetSelection())
-                if devices:
-                    l_devices = list(devices)
-                    self.device_choice.Set(l_devices)
-                    try:
-                        sel = l_devices.index(curr)
-                    except ValueError:
-                        sel = 0
-                    self.device_choice.SetSelection(sel)
-                    self.connect_button.Enable()
-                else:
-                    self.device_choice.Set(['[No connected device]'])
-                    self.device_choice.SetSelection(0)
-                    self.connect_button.Disable()
+                    self.device_watcher()
             time.sleep(0.1)
+
+    def device_lister(self) -> None:
+        devices = {}
+        for i in range(self._dev.GetDeviceCount()):
+            model = self._dev.GetDeviceListModel(i)
+            serial = self._dev.GetDeviceListSerial(i)
+            if model and serial:
+                devices[serial] = model
+            else:
+                break
+        if devices != self.devices:
+            self.devices = devices
+            curr = self.device_choice.GetString(
+                self.device_choice.GetSelection())
+            if devices:
+                l_devices = list(devices)
+                self.device_choice.Set(l_devices)
+                try:
+                    sel = l_devices.index(curr)
+                except ValueError:
+                    sel = 0
+                self.device_choice.SetSelection(sel)
+                self.connect_button.Enable()
+            else:
+                self.device_choice.Set(['[No connected device]'])
+                self.device_choice.SetSelection(0)
+                self.connect_button.Disable()
 
     def device_watcher(self) -> None:
-        logging.getLogger('OSCGUI').debug('device_watcher started')
-        while self.device is not None:
-            assert isinstance(self.device, osc1lite.OSC1Lite)
-            if not self._dev.IsOpen():
-                logging.getLogger('OSCGUI').error(
-                    'device closed unexpectedly')
-                return
-            warn = self.device.get_channel_warnings()
-            status = self.device.status()
-            overlap = [x for x in warn['Trigger Overlap'] if
-                       self.channels_ui[x].trigger_choice.GetSelection() == 1 or
-                       not self.channels_ui[x].continuous_toggle.GetValue()]
-            if overlap:
-                logging.getLogger('OSCGUI').warning(
-                    'Waveform restarted due to '
-                    'asynchronous trigger on channel(s): %s',
-                    ', '.join(str(x) for x in overlap))
-            channel_warnings = [[] for _ in range(12)]
-            for x, chs in warn.items():
-                for ch in chs:
-                    logging.getLogger('OSCGUI').debug(
-                        'Board reported: [Channel %d] %s' % (ch, x))
-                    if x != 'Trigger Overlap':
-                        channel_warnings[ch].append(x)
-            for ch, x in enumerate(channel_warnings):
-                target_color = (
-                    wx.Colour(255, 172, 174) if x
-                    else wx.Colour(0, 243, 243) if status & (1 << ch)
-                    else wx.Colour(206, 206, 0))
-                if (target_color !=
-                        self.channels_ui[ch].status_text.GetBackgroundColour()):
-                    self.channels_ui[ch].status_text.SetBackgroundColour(
-                        target_color)
-                target_text = (', '.join(x) if x else
-                               'Normal' if status & (1 << ch) else 'Stopped')
-                current_text = self.channels_ui[ch].status_text.GetValue()
-                if target_text != current_text:
-                    self.channels_ui[ch].status_text.SetValue(target_text)
-                if target_text != current_text != 'Board not connected':
-                    logging.getLogger('OSCGUI').log(
-                        level=(logging.WARNING
-                               if target_color != wx.Colour(0, 243, 243)
-                               else logging.INFO),
-                        msg='Channel %d status: %s' % (ch, target_text))
-
-            time.sleep(0.1)
+        assert isinstance(self.device, osc1lite.OSC1Lite)
+        if not self._dev.IsOpen():
+            logging.getLogger('OSCGUI').error(
+                'device closed unexpectedly')
+            return
+        warn = self.device.get_channel_warnings()
+        status = self.device.status()
+        overlap = [x for x in warn['Trigger Overlap'] if
+                   self.channels_ui[x].trigger_choice.GetSelection() == 1 or
+                   not self.channels_ui[x].continuous_toggle.GetValue()]
+        if overlap:
+            logging.getLogger('OSCGUI').warning(
+                'Waveform restarted due to '
+                'asynchronous trigger on channel(s): %s',
+                ', '.join(str(x) for x in overlap))
+        channel_warnings = [[] for _ in range(12)]
+        for x, chs in warn.items():
+            for ch in chs:
+                logging.getLogger('OSCGUI').debug(
+                    'Board reported: [Channel %d] %s' % (ch, x))
+                if x != 'Trigger Overlap':
+                    channel_warnings[ch].append(x)
+        for ch, x in enumerate(channel_warnings):
+            target_color = (
+                wx.Colour(255, 172, 174) if x
+                else wx.Colour(0, 243, 243) if status & (1 << ch)
+                else wx.Colour(206, 206, 0))
+            if (target_color !=
+                    self.channels_ui[ch].status_text.GetBackgroundColour()):
+                self.channels_ui[ch].status_text.SetBackgroundColour(
+                    target_color)
+            target_text = (', '.join(x) if x else
+                           'Normal' if status & (1 << ch) else 'Stopped')
+            current_text = self.channels_ui[ch].status_text.GetValue()
+            if target_text != current_text:
+                self.channels_ui[ch].status_text.SetValue(target_text)
+            if target_text != current_text != 'Board not connected':
+                logging.getLogger('OSCGUI').log(
+                    level=(logging.WARNING
+                           if target_color != wx.Colour(0, 243, 243)
+                           else logging.INFO),
+                    msg='Channel %d status: %s' % (ch, target_text))
 
     def __init__(self, parent=None, ident=-1):
         wx.Frame.__init__(self, parent, ident,
@@ -326,8 +328,7 @@ class MainFrame(wx.Frame):
         self.connect_button = wx.Button(p, -1, 'Connect')
         self.connect_button.Disable()
         self.connect_button.Bind(wx.EVT_BUTTON, self.on_connect)
-        self.thread = threading.Thread(target=self.device_lister, daemon=True)
-        self.thread.start()
+        threading.Thread(target=self.daemon, daemon=True).start()
         setup_sizer.Add(LabeledCtrl(self.device_choice, p, -1,
                                     'Select your OSC1Lite'),
                         0, wx.EXPAND | wx.ALL, 3)
@@ -502,46 +503,42 @@ class MainFrame(wx.Frame):
                 break
 
     def on_connect(self, event: wx.Event):
-        if self.connect_button.GetLabel() == 'Connect':
-            assert (self.device is None)
-            self.device_choice.Disable()
-            self._dev.OpenBySerial(self.device_choice.GetString(
-                self.device_choice.GetSelection()))
-            self.device = osc1lite.OSC1Lite(self._dev)
-            self.thread.join()
-            self.device.configure(bit_file='OSC1_LITE_Control.bit',
-                                  ignore_hash_error=True)
-            self.device.reset()
-            self.device.init_dac()
-            self.device.enable_dac_output()
-            self.connect_button.SetLabel('Disconnect')
+        threading.Thread(target=self.on_connect_worker).start()
 
-            for x in self.channels_ui:
-                x.trigger_button.Enable()
-                x.stop_button.Enable()
-                x.trigger_out_check.Enable()
-            self.thread = threading.Thread(target=self.device_watcher,
-                                           daemon=True)
-            self.thread.start()
-            logging.getLogger('OSCGUI').info('Connected')
-        else:
-            self.device.disable_dac()
-            self._dev.Close()
-            self.device = None
-            self.thread.join()
-            self.thread = threading.Thread(target=self.device_lister,
-                                           daemon=True)
-            self.thread.start()
-            self.device_choice.Enable()
-            self.connect_button.SetLabel('Connect')
-            for x in self.channels_ui:
-                x.trigger_button.Disable()
-                x.stop_button.Disable()
-                x.trigger_out_check.SetValue(False)
-                x.trigger_out_check.Disable()
-                x.status_text.SetBackgroundColour(wx.NullColour)
-                x.status_text.SetValue('Board not connected')
-            logging.getLogger('OSCGUI').info('Disconnected')
+    def on_connect_worker(self):
+        with self.daemon_lock:
+            if self.connect_button.GetLabel() == 'Connect':
+                assert self.device is None
+                self.device_choice.Disable()
+                self._dev.OpenBySerial(self.device_choice.GetString(
+                    self.device_choice.GetSelection()))
+                self.device = osc1lite.OSC1Lite(self._dev)
+                self.device.configure(bit_file='OSC1_LITE_Control.bit',
+                                      ignore_hash_error=True)
+                self.device.reset()
+                self.device.init_dac()
+                self.device.enable_dac_output()
+                self.connect_button.SetLabel('Disconnect')
+
+                for x in self.channels_ui:
+                    x.trigger_button.Enable()
+                    x.stop_button.Enable()
+                    x.trigger_out_check.Enable()
+                logging.getLogger('OSCGUI').info('Connected')
+            else:
+                self.device.disable_dac()
+                self._dev.Close()
+                self.device = None
+                self.device_choice.Enable()
+                self.connect_button.SetLabel('Connect')
+                for x in self.channels_ui:
+                    x.trigger_button.Disable()
+                    x.stop_button.Disable()
+                    x.trigger_out_check.SetValue(False)
+                    x.trigger_out_check.Disable()
+                    x.status_text.SetBackgroundColour(wx.NullColour)
+                    x.status_text.SetValue('Board not connected')
+                logging.getLogger('OSCGUI').info('Disconnected')
 
     def on_clear_log(self, event: wx.Event):
         self.log_text.Clear()
