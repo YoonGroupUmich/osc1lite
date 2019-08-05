@@ -46,7 +46,7 @@ class ChannelInfo:
 
 class OSC1Lite:
     _bit_file_sha256sum = (
-        'cfb3dc63164b7615f908f27fbd099071bfa789c48c51b7a92a96801c34fad4e0')
+        '40da62c41fd5eb275a88d88b70ace277a6cad366c734897a1db4057d1552442a')
 
     @staticmethod
     def _sha256sum(filename: str, block_size=2 ** 22):
@@ -160,8 +160,10 @@ class OSC1Lite:
             data.wf.amp, data.wf.pulse_width, data.wf.period)
         word = round(data.wf.pulse_width / (2 ** 7) * self._freq)
         word_pw = 0 if word < 0 else 0xffff if word > 0xfffff else word
+        print('word_pw =', word_pw)
         word = round(data.wf.period / (2 ** 7) * self._freq)
         word_period = 0 if word < 0 else 0xffff if word > 0xfffff else word
+        print('word_period =', word_period)
         word = round(data.wf.amp / 24000 * 65536)
         word_amp = 0 if word < 0 else 0xffff if word > 0xffff else word
         with self.device_lock:
@@ -194,7 +196,7 @@ class OSC1Lite:
     def init_dac(self):
         with self.device_lock:
             self._write_to_wire_in(0x01, 5)
-            self._write_to_wire_in(0x01, 3)
+            # self._write_to_wire_in(0x01, 3)
             self._write_to_wire_in(0x01, 0)
 
     def disable_dac(self):
@@ -210,16 +212,12 @@ class OSC1Lite:
 
     def trigger_channel(self, ch):
         logging.getLogger('OSC1Lite').debug('triggering %s', str(ch))
-        channel_bit = 0
-        try:
-            for x in ch:
-                channel_bit |= 1 << x
-        except TypeError:
-            channel_bit = 1 << ch
         with self.device_lock:
-            self._write_to_wire_in(0x08, channel_bit, mask=channel_bit,
-                                   update=True)
-            self._write_to_wire_in(0x08, 0, mask=channel_bit, update=True)
+            try:
+                for x in ch:
+                    self.dev.ActivateTriggerIn(0x55, x)
+            except TypeError:
+                self.dev.ActivateTriggerIn(0x55, ch)
 
     def set_trigger_out(self, ch, enable=True):
         channel_bit = 0
@@ -235,15 +233,13 @@ class OSC1Lite:
     def set_enable(self, ch, enable=True):
         logging.getLogger('OSC1Lite').debug('%sabling channel %s',
                                             'En' if enable else 'Dis', str(ch))
-        channel_bit = 0
-        try:
-            for x in ch:
-                channel_bit |= 1 << x
-        except TypeError:
-            channel_bit = 1 << ch
+        addr = 0x53 if enable else 0x54
         with self.device_lock:
-            self._write_to_wire_in(0x0b, channel_bit if enable else 0,
-                                   mask=channel_bit, update=True)
+            try:
+                for x in ch:
+                    self.dev.ActivateTriggerIn(addr, x)
+            except TypeError:
+                self.dev.ActivateTriggerIn(addr, ch)
 
     def get_channel_warnings(self):
         with self.device_lock:
@@ -271,4 +267,7 @@ class OSC1Lite:
     def status(self):
         with self.device_lock:
             self.dev.UpdateWireOuts()
-            return self.dev.GetWireOutValue(0x21)
+            # 0x21:  1: Output working, 0: Not triggered
+            # 0x22:  1: Channel Enabled, 0: Channel Disabled
+            return (self.dev.GetWireOutValue(0x21),
+                    self.dev.GetWireOutValue(0x22))
