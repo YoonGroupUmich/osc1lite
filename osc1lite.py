@@ -46,7 +46,7 @@ class ChannelInfo:
 
 class OSC1Lite:
     _bit_file_sha256sum = (
-        '99ed03cdb5c937f92091da081467c88090cb7934624c8fcce4f27c4a4d348721')
+        'c658656e373800a8d6f6ccfbc89d7dd3301cddd595784f97ed171f7a36028474')
 
     @staticmethod
     def _sha256sum(filename: str, block_size=2 ** 22):
@@ -90,21 +90,37 @@ class OSC1Lite:
             if ret == ok.okCFrontPanel.NoError:
                 pass
             elif ret == ok.okCFrontPanel.DeviceNotOpen:
-                raise OSError('ConfigureFPGA() returned DeviceNotOpen')
+                msg = 'ConfigureFPGA() returned DeviceNotOpen'
+                logging.getLogger('OSC1Lite').fatal(msg)
+                raise OSError(msg)
             elif ret == ok.okCFrontPanel.FileError:
-                raise OSError('ConfigureFPGA() returned FileError')
+                msg = 'ConfigureFPGA() returned FileError'
+                logging.getLogger('OSC1Lite').fatal(msg)
+                raise OSError(msg)
             elif ret == ok.okCFrontPanel.InvalidBitstream:
-                raise OSError('ConfigureFPGA() returned InvalidBitstream')
+                msg = 'ConfigureFPGA() returned InvalidBitstream'
+                logging.getLogger('OSC1Lite').fatal(msg)
+                raise OSError(msg)
             elif ret == ok.okCFrontPanel.DoneNotHigh:
-                raise OSError('ConfigureFPGA() returned DoneNotHigh')
+                msg = 'ConfigureFPGA() returned DoneNotHigh'
+                logging.getLogger('OSC1Lite').fatal(msg)
+                raise OSError(msg)
             elif ret == ok.okCFrontPanel.TransferError:
-                raise OSError('ConfigureFPGA() returned TransferError')
+                msg = 'ConfigureFPGA() returned TransferError'
+                logging.getLogger('OSC1Lite').fatal(msg)
+                raise OSError(msg)
             elif ret == ok.okCFrontPanel.CommunicationError:
-                raise OSError('ConfigureFPGA() returned CommunicationError')
+                msg = 'ConfigureFPGA() returned CommunicationError'
+                logging.getLogger('OSC1Lite').fatal(msg)
+                raise OSError(msg)
             elif ret == ok.okCFrontPanel.UnsupportedFeature:
-                raise OSError('ConfigureFPGA() returned UnsupportedFeature')
+                msg = 'ConfigureFPGA() returned UnsupportedFeature'
+                logging.getLogger('OSC1Lite').fatal(msg)
+                raise OSError(msg)
             else:
-                raise OSError('ConfigureFPGA() returned ' + str(ret))
+                msg = 'ConfigureFPGA() returned' + str(ret)
+                logging.getLogger('OSC1Lite').fatal(msg)
+                raise OSError(msg)
 
             # Configure the PLL clock used by FPGA
             # CLK = Ref / Q * P / div
@@ -124,14 +140,10 @@ class OSC1Lite:
 
             pll.SetOutputSource(0, pll.ClkSrc_Div1ByN)
             pll.SetOutputEnable(0, True)
-            # pll.SetDiv2(pll.DivSrc_VCO, 8)
-            # pll.SetOutputSource(1, pll.ClkSrc_Div2ByN)
-            # pll.SetOutputEnable(1, True)
             self.dev.SetPLL22150Configuration(pll)
-            for i in range(2):
-                logging.getLogger('OSC1Lite.PLL').info(
-                    'PLL output #{i} freq = {freq}MHz'.format(
-                        i=i, freq=pll.GetOutputFrequency(i)))
+            logging.getLogger('OSC1Lite.PLL').info(
+                'PLL output freq = {freq}MHz'.format(
+                    freq=pll.GetOutputFrequency(0)))
 
             self._freq = pll.GetOutputFrequency(0) * (10 ** 6)
 
@@ -254,6 +266,28 @@ class OSC1Lite:
                     i for i in range(16) if self.dev.IsTriggered(
                         0x6b + i // 3, 1 << (i % 3 * 5 + 4))]
             }
+
+    def set_trigger_source(self, ch, source):
+        channel_bit = 0
+        try:
+            for x in ch:
+                channel_bit |= 1 << x
+        except TypeError:
+            channel_bit = 1 << ch
+        with self.device_lock:
+            self._write_to_wire_in(0x08, channel_bit if source else 0,
+                                   mask=channel_bit, update=True)
+
+    def set_trigger_mode(self, ch, continuous):
+        channel_bit = 0
+        try:
+            for x in ch:
+                channel_bit |= 1 << x
+        except TypeError:
+            channel_bit = 1 << ch
+        with self.device_lock:
+            self._write_to_wire_in(0x0b, channel_bit if continuous else 0,
+                                   mask=channel_bit, update=True)
 
     def status(self):
         with self.device_lock:
