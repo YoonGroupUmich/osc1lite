@@ -46,7 +46,7 @@ class ChannelInfo:
 
 class OSC1Lite:
     _bit_file_sha256sum = (
-        '40da62c41fd5eb275a88d88b70ace277a6cad366c734897a1db4057d1552442a')
+        '99ed03cdb5c937f92091da081467c88090cb7934624c8fcce4f27c4a4d348721')
 
     @staticmethod
     def _sha256sum(filename: str, block_size=2 ** 22):
@@ -160,10 +160,8 @@ class OSC1Lite:
             data.wf.amp, data.wf.pulse_width, data.wf.period)
         word = round(data.wf.pulse_width / (2 ** 7) * self._freq)
         word_pw = 0 if word < 0 else 0xffff if word > 0xfffff else word
-        print('word_pw =', word_pw)
         word = round(data.wf.period / (2 ** 7) * self._freq)
         word_period = 0 if word < 0 else 0xffff if word > 0xfffff else word
-        print('word_period =', word_period)
         word = round(data.wf.amp / 24000 * 65536)
         word_amp = 0 if word < 0 else 0xffff if word > 0xffff else word
         with self.device_lock:
@@ -191,19 +189,12 @@ class OSC1Lite:
             self.reset_pipe()
             for i in range(12):
                 self.set_channel(i, ChannelInfo(SquareWaveform()))
-        print('Reset done')
+        logging.getLogger('OSC1Lite').info('Reset done')
 
     def init_dac(self):
         with self.device_lock:
             self._write_to_wire_in(0x01, 5)
             # self._write_to_wire_in(0x01, 3)
-            self._write_to_wire_in(0x01, 0)
-
-    def disable_dac(self):
-        logging.getLogger('OSC1Lite').debug('Disable DAC')
-        with self.device_lock:
-            self._write_to_wire_in(0x01, 6)
-            time.sleep(0.1)
             self._write_to_wire_in(0x01, 0)
 
     def enable_dac_output(self):
