@@ -1,5 +1,6 @@
 #! /usr/bin/env python3.5
 
+import configparser
 import logging
 import matplotlib.pyplot as plt
 import os
@@ -15,6 +16,8 @@ import osc1lite
 __version__ = '0.0.1'
 
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "DEBUG"))
+oscgui_config = configparser.ConfigParser()
+oscgui_config.read('config.ini')
 
 
 class LabeledCtrl(wx.BoxSizer):
@@ -27,7 +30,7 @@ class LabeledCtrl(wx.BoxSizer):
 class ChannelCtrl:
     _error_color = wx.Colour(255, 172, 172)
     _warning_color = wx.Colour(206, 206, 0)
-    _normal_color = wx.Colour(0, 243, 243)
+    _normal_color = wx.Colour(91, 214, 255)
     _disabled_color = wx.NullColour
 
     def __init__(self, ch: int, channel_label: wx.StaticText,
@@ -38,6 +41,7 @@ class ChannelCtrl:
         self.ch = ch
         self.mf = mf
         self.channel_label = channel_label
+        self.channel_name = channel_label.GetLabel()
         self.waveform_choice = waveform_choice
         self.waveform_choice.Bind(wx.EVT_CHOICE, lambda _: self.set_modified())
         self.trigger_choice = trigger_choice
@@ -45,7 +49,11 @@ class ChannelCtrl:
         self.continuous_toggle = continuous_toggle
         self.continuous_toggle.Bind(wx.EVT_TOGGLEBUTTON, self.on_toggle)
         self.trigger_button = trigger_button
+        trigger_button.Bind(wx.EVT_BUTTON,
+                            lambda _: mf.device.trigger_channel(ch))
         self.stop_button = stop_button
+        self.stop_button.Bind(wx.EVT_BUTTON, lambda evt: mf.device.set_enable(
+            ch, stop_button.GetLabel() == 'Enable'))
         self.trigger_out_check = trigger_out_check
         self.status_text = status_text
 
@@ -75,6 +83,7 @@ class ChannelCtrl:
         self.continuous_toggle.SetLabel('One-shot')
         self.continuous_toggle.SetValue(False)
         self.stop_button.Disable()
+        self.stop_button.SetLabel('Enable')
         self.trigger_button.Disable()
         self.trigger_out_check.Disable()
         self.trigger_out_check.SetValue(False)
@@ -87,11 +96,11 @@ class ChannelCtrl:
             return self._error_color, warning
         if not self._enabled:
             if self.output:
-                return self._error_color, 'Disabled Normal ??!!??!'
+                return self._error_color, 'Disabled Normal (Inconsistent State)'
             return self._disabled_color, 'Disabled'
         if self.output:
             return self._normal_color, 'Normal'
-        return self._warning_color, 'Stopped (Not triggered)'
+        return self._disabled_color, 'Paused (Ready for trigger)'
 
     @property
     def enabled(self):
@@ -138,11 +147,11 @@ class ChannelCtrl:
         self.trigger = self.trigger_choice.GetSelection()
         self.continuous = self.continuous_toggle.GetValue()
         self.modified = False
-        self.channel_label.SetLabel('Channel %d' % self.ch)
+        self.channel_label.SetLabel(self.channel_name)
 
     def set_modified(self):
         self.modified = True
-        self.channel_label.SetLabel('*Channel %d' % self.ch)
+        self.channel_label.SetLabel('*' + self.channel_name)
 
 
 class SquareWavePanel(wx.FlexGridSizer):
@@ -155,30 +164,37 @@ class SquareWavePanel(wx.FlexGridSizer):
         self.Add(wx.StaticText(parent, -1, 'Pulse Width (ms)'), 0, wx.EXPAND)
         self.Add(wx.StaticText(parent, -1, 'Rise Time (ms)'), 0, wx.EXPAND)
 
-        self.amp = 2000  # uA
+        self.amp = 0  # uA
         self.pulse_width = 0  # ms
         self.period = 0  # ms
         self.rise_time = 0  # ms
 
-        self.amp_text = wx.TextCtrl(parent, -1, '2000')
+        self.amp_text = wx.TextCtrl(parent, -1, '0',
+                                    style=wx.TE_PROCESS_ENTER)
         self.amp_text.SetToolTip(
-            'Range: 0~100\u03bcA, Precision: \u00b10.37\u03bcA')
+            'Range: 0~100\u03bcA, Precision: \u00b10.31\u03bcA')
         self.amp_text.Bind(wx.EVT_KILL_FOCUS, self.on_amp)
+        self.amp_text.Bind(wx.EVT_TEXT_ENTER, self.on_amp)
         self.Add(self.amp_text, 0, wx.EXPAND)
-        self.period_text = wx.TextCtrl(parent, -1, '0')
+        self.period_text = wx.TextCtrl(parent, -1, '0',
+                                       style=wx.TE_PROCESS_ENTER)
         self.period_text.SetToolTip(
             'Range: 0~17.9s, Precision: \u00b18.6\u03bcs')
         self.period_text.Bind(wx.EVT_KILL_FOCUS, self.on_period)
+        self.period_text.Bind(wx.EVT_TEXT_ENTER, self.on_period)
         self.Add(self.period_text, 0, wx.EXPAND)
-        self.pw_text = wx.TextCtrl(parent, -1, '0')
+        self.pw_text = wx.TextCtrl(parent, -1, '0', style=wx.TE_PROCESS_ENTER)
         self.pw_text.SetToolTip(
             'Range: 0~period, Precision: \u00b18.6\u03bcs')
         self.pw_text.Bind(wx.EVT_KILL_FOCUS, self.on_pulse_width)
+        self.pw_text.Bind(wx.EVT_TEXT_ENTER, self.on_pulse_width)
         self.Add(self.pw_text, 0, wx.EXPAND)
-        self.rise_time_text = wx.TextCtrl(parent, -1, '0')
+        self.rise_time_text = wx.TextCtrl(parent, -1, '0',
+                                          style=wx.TE_PROCESS_ENTER)
         self.rise_time_text.SetToolTip(
             'Possible values: 0, 0.1, 0.5, 1, 2ms')
         self.rise_time_text.Bind(wx.EVT_KILL_FOCUS, self.on_rise_time)
+        self.rise_time_text.Bind(wx.EVT_TEXT_ENTER, self.on_rise_time)
         self.Add(self.rise_time_text, 0, wx.EXPAND)
 
         self.modify_callback = modify_callback
@@ -192,7 +208,7 @@ class SquareWavePanel(wx.FlexGridSizer):
                                        period=self.period / 1000,
                                        mode=mode)
 
-    def on_amp(self, event: wx.FocusEvent):
+    def on_amp(self, event: wx.Event):
         try:
             val = float(self.amp_text.GetValue())
         except ValueError:
@@ -201,16 +217,16 @@ class SquareWavePanel(wx.FlexGridSizer):
             return
         if val > 100:
             val = 100
-        word = round(val / 24000 * 65536)
+        word = round(val / 20000 * 65536)
         word = 0 if word < 0 else 0xffff if word > 0xffff else word
-        val = word / 65536 * 24000
+        val = word / 65536 * 20000
         if self.amp != val:
             self.amp = val
             self.modify_callback()
         self.amp_text.SetValue('%.1f' % self.amp)
         event.Skip()
 
-    def on_pulse_width(self, event: wx.FocusEvent):
+    def on_pulse_width(self, event: wx.Event):
         try:
             val = float(self.pw_text.GetValue())
         except ValueError:
@@ -228,7 +244,7 @@ class SquareWavePanel(wx.FlexGridSizer):
         self.pw_text.SetValue('%.3f' % self.pulse_width)
         event.Skip()
 
-    def on_period(self, event: wx.FocusEvent):
+    def on_period(self, event: wx.Event):
         try:
             val = float(self.period_text.GetValue())
         except ValueError:
@@ -247,7 +263,7 @@ class SquareWavePanel(wx.FlexGridSizer):
         self.period_text.SetValue('%.3f' % self.period)
         event.Skip()
 
-    def on_rise_time(self, event: wx.FocusEvent):
+    def on_rise_time(self, event: wx.Event):
         try:
             val = float(self.rise_time_text.GetValue())
         except ValueError:
@@ -296,9 +312,11 @@ class WaveFormPanel(wx.StaticBoxSizer):
         waveform_type_choice.Bind(wx.EVT_CHOICE, self.on_type)
         common.Add(LabeledCtrl(waveform_type_choice, p,
                                -1, 'Waveform Type'), 0, wx.ALL, 3)
-        self.num_of_pulses = wx.SpinCtrl(p, -1, min=1, max=0xffff)
+        self.num_of_pulses = wx.SpinCtrl(p, -1, min=1, max=0xffff,
+                                         style=wx.TE_PROCESS_ENTER)
         self.num_of_pulses.Bind(wx.EVT_SPINCTRL,
                                 lambda _: modify_callback(self.label))
+        self.num_of_pulses.Bind(wx.EVT_TEXT_ENTER, self.on_num_of_pulses)
         self.num_of_pulses.SetToolTip('Range: 1~65535')
 
         common.Add(
@@ -319,7 +337,13 @@ class WaveFormPanel(wx.StaticBoxSizer):
         self.Hide(self.p_custom)
         # self.Layout()
         self.detail = self.p_square
+        self.modify_callback = modify_callback
         p.SetFont(font)
+
+    def on_num_of_pulses(self, event: wx.Event):
+        self.num_of_pulses.SetValue(self.num_of_pulses.GetValue())
+        self.modify_callback(self.label)
+        event.Skip()
 
     def channel_info(self) -> osc1lite.ChannelInfo:
         wf = self.detail.get_waveform()
@@ -424,7 +448,8 @@ class WaveformManager(wx.ScrolledWindow):
     def on_new_wf(self, event: wx.Event):
         self.parent.Freeze()
         self.cnt += 1
-        wf = WaveFormPanel(self, 'Waveform %d' % self.cnt)
+        wf = WaveFormPanel(
+            self, 'Waveform %d' % self.cnt, self.mf.set_wf_modified)
         self.waveform_panels.append(wf)
         self.box.Add(wf, 0, wx.EXPAND | wx.TOP | wx.BOTTOM, 5)
         self.box.SetSizeHints(self)
@@ -487,8 +512,8 @@ class MainFrame(wx.Frame):
         if overlap:
             logging.getLogger('OSCGUI').warning(
                 'Waveform restarted due to '
-                'asynchronous trigger on channel(s): %s',
-                ', '.join(str(x) for x in overlap))
+                'asynchronous trigger on: %s',
+                ', '.join(self.channels_ui[x].channel_name for x in overlap))
         channel_warnings = [[] for _ in range(16)]
         for x, chs in warn.items():
             for ch in chs:
@@ -503,10 +528,11 @@ class MainFrame(wx.Frame):
                 self.channels_ui[ch].warnings = x
                 if x:
                     logging.getLogger('OSCGUI').warning(
-                        'Channel %d alerts: %s' % (ch, ', '.join(x)))
+                        '%s alerts: %s' % (self.channels_ui[ch].channel_name,
+                                           ', '.join(x)))
                 else:
                     logging.getLogger('OSCGUI').info(
-                        'No alerts on Channel %d' % ch)
+                        '%s back to normal' % self.channels_ui[ch].channel_name)
             self.channels_ui[ch].output = bool(status[0] & (1 << ch))
             self.channels_ui[ch].enabled = not bool(status[1] & (1 << ch))
             target_color, target_text = self.channels_ui[
@@ -569,11 +595,18 @@ class MainFrame(wx.Frame):
         channel_box.Add(wx.StaticText(p, -1, 'PC Trigger'), 0, wx.ALIGN_CENTER)
         channel_box.Add(wx.StaticText(p, -1, 'Trigger Out'), 0, wx.ALIGN_CENTER)
         channel_box.Add(wx.StaticText(p, -1, 'Status'), 0, wx.ALIGN_CENTER)
-        self.channels_ui = []
+        channels_ui = []
         channel_box.AddGrowableCol(7, 1)
         for i in range(12):
-            channel_label = wx.StaticText(p, -1, 'Channel %d' % i)
-            channel_box.Add(channel_label, 0, wx.ALIGN_CENTER_VERTICAL)
+
+            if oscgui_config['Channel']['order'] == 'shank':
+                ch = (7, 2, 8, 0, 6, 1, 10, 5, 11, 3, 9, 4)[i]
+                channel_label = wx.StaticText(
+                    p, -1, 'S%dL%d' % (i // 3 + 1, i % 3 + 1))
+            else:
+                ch = i
+                channel_label = wx.StaticText(p, -1, 'Channel %d' % i)
+            channel_box.Add(channel_label, 0, wx.ALIGN_CENTER)
 
             waveform_choice = wx.Choice(p, -1,
                                         choices=['Waveform %d' % (x + 1) for x
@@ -597,14 +630,11 @@ class MainFrame(wx.Frame):
             channel_box.Add(wrap_box, 0, wx.EXPAND)
 
             stop_button = wx.Button(p, -1, 'Enable', style=wx.BU_EXACTFIT)
-            stop_button.Bind(wx.EVT_BUTTON, self.on_stop)
             wrap_box = wx.BoxSizer(wx.HORIZONTAL)
             wrap_box.Add(stop_button, 1, wx.ALIGN_CENTER_VERTICAL)
             channel_box.Add(wrap_box, 0, wx.EXPAND)
 
             trigger_button = wx.Button(p, -1, 'Trigger', style=wx.BU_EXACTFIT)
-            trigger_button.Bind(wx.EVT_BUTTON,
-                                lambda _, i=i: self.device.trigger_channel(i))
             wrap_box = wx.BoxSizer(wx.HORIZONTAL)
             wrap_box.Add(trigger_button, 1, wx.ALIGN_CENTER_VERTICAL)
             channel_box.Add(wrap_box, 0, wx.EXPAND)
@@ -620,12 +650,17 @@ class MainFrame(wx.Frame):
             channel_box.Add(wrap_box, 0, wx.EXPAND | wx.LEFT, 5)
 
             channel = ChannelCtrl(
-                i, channel_label, waveform_choice, trigger_choice,
+                ch, channel_label, waveform_choice, trigger_choice,
                 continuous_toggle, trigger_button, stop_button,
                 trigger_out_check, status_text, self)
             channel.on_disconnect()
-            self.channels_ui.append(channel)
+            channels_ui.append(channel)
             channel_box.AddGrowableRow(i, 1)
+        if oscgui_config['Channel']['order'] == 'shank':
+            self.channels_ui = [channels_ui[x] for x in
+                                (3, 5, 1, 9, 11, 7, 4, 0, 2, 10, 6, 8)]
+        else:
+            self.channels_ui = channels_ui
         channel_panel.Add(channel_box, 1, wx.EXPAND)
 
         right_box = wx.BoxSizer(wx.VERTICAL)
@@ -633,14 +668,16 @@ class MainFrame(wx.Frame):
 
         extra_buttons = wx.BoxSizer(wx.HORIZONTAL)
 
-        update_all = wx.Button(p, -1, 'Update all channel parameters')
-        update_all.SetToolTip(
-            'This will update all waveform parameters, '
-            'trigger source, and trigger mode for all modified channel(s).\n'
-            'Modified channel(s) are marked with asterisk.')
-        update_all.Bind(wx.EVT_BUTTON, self.on_update)
+        if oscgui_config['Waveform']['realtime_update'] != 'True':
+            update_all = wx.Button(p, -1, 'Update all channel parameters')
+            update_all.SetToolTip(
+                'This will update all waveform parameters, '
+                'trigger source, and trigger mode for all modified channel(s).'
+                '\nModified channel(s) are marked with asterisk.')
+            update_all.Bind(wx.EVT_BUTTON, self.on_update)
+            extra_buttons.Add(update_all)
+            self.board_relative_controls.append(update_all)
 
-        extra_buttons.Add(update_all)
         enable_all = wx.Button(p, -1, 'Enable All')
         enable_all.Bind(wx.EVT_BUTTON,
                         lambda _: self.device.set_enable(range(12), True))
@@ -654,7 +691,7 @@ class MainFrame(wx.Frame):
                          lambda _: self.device.trigger_channel(range(12)))
         extra_buttons.Add(trigger_all)
         self.board_relative_controls.extend(
-            (update_all, trigger_all, enable_all, disable_all))
+            (trigger_all, enable_all, disable_all))
         right_box.Add(extra_buttons, 0, wx.EXPAND | wx.BOTTOM, 50)
 
         log_text = wx.TextCtrl(p, -1, style=wx.TE_MULTILINE | wx.TE_READONLY)
@@ -695,28 +732,32 @@ class MainFrame(wx.Frame):
 
     def on_update(self, event: wx.Event):
         chs = [ch for ch in range(12) if self.channels_ui[ch].modified]
-        self.device.set_enable(chs, False)
-        for ch, x in enumerate(self.channels_ui):
-            if x.modified:
-                x.update_param()
-                wf = x.waveform_choice.GetSelection()
-                data = self.wfm.waveform_panels[wf].channel_info()
-                data.ext_trig = x.trigger
-                # if x.continuous:
-                #    data.n_pulses = 0
-                self.device.set_channel(ch, data)
-        logging.getLogger('OSCGUI').info('Channel(s) updated: %s',
-                                         ', '.join(str(ch) for ch in chs))
+        if chs:
+            if self.device is not None:
+                self.device.set_enable(chs, False)
+            for ch, x in enumerate(self.channels_ui):
+                if x.modified:
+                    x.update_param()
+                    wf = x.waveform_choice.GetSelection()
+                    data = self.wfm.waveform_panels[wf].channel_info()
+                    data.ext_trig = 0
+                    if self.device is not None:
+                        self.device.set_channel(ch, data)
+            if oscgui_config['Waveform']['realtime_update'] != 'True':
+                logging.getLogger('OSCGUI').info(
+                    'Waveform updated: %s',
+                    ', '.join(self.channels_ui[ch].channel_name for ch in chs))
+            else:
+                disabled_list = [self.channels_ui[ch].channel_name for ch in chs
+                                 if self.channels_ui[ch].enabled]
+                if disabled_list:
+                    logging.getLogger('OSCGUI').info(
+                        'Channel(s) disabled due to waveform change: %s',
+                        ', '.join(disabled_list))
 
-    def on_stop(self, event: wx.Event):
-        ident = event.GetId()
-        obj = event.GetEventObject()
-        assert isinstance(obj, wx.Button)
-        assert isinstance(self.device, osc1lite.OSC1Lite)
-        for ch, x in enumerate(self.channels_ui):
-            if ident == x.stop_button.GetId():
-                self.device.set_enable(ch, obj.GetLabel() == 'Enable')
-                break
+        elif oscgui_config['Waveform']['realtime_update'] != 'True':
+            logging.getLogger('OSCGUI').info(
+                'Channels already up to date')
 
     def on_connect_worker(self, connect=None):
         if connect is None:
@@ -728,9 +769,20 @@ class MainFrame(wx.Frame):
                 self._dev.OpenBySerial(self.device_choice.GetStringSelection())
                 self.device = osc1lite.OSC1Lite(self._dev)
                 try:
-                    self.device.configure(bit_file='OSC1_LITE_Control.bit',
-                                          ignore_hash_error=True)
-                except OSError:
+                    self.device.configure(
+                        bit_file='OSC1_LITE_Control.bit',
+                        ignore_hash_error=oscgui_config[
+                                              'OSC1Lite'][
+                                              'bitfile_integrity_check'] == 'True')
+                except OSError as e:
+                    wx.MessageBox(str(e), 'Connect failed',
+                                  wx.OK | wx.CENTRE | wx.ICON_ERROR)
+                    self.device = None
+                    self._dev.Close()
+                    return
+                except ValueError as e:
+                    wx.MessageBox(str(e), 'Connect failed',
+                                  wx.OK | wx.CENTRE | wx.ICON_ERROR)
                     self.device = None
                     self._dev.Close()
                     return
@@ -746,6 +798,8 @@ class MainFrame(wx.Frame):
                 for x in self.board_relative_controls:
                     x.Enable()
                 logging.getLogger('OSCGUI').info('Connected')
+                if oscgui_config['Waveform']['realtime_update'] == 'True':
+                    self.on_update(None)
                 self.Thaw()
             else:
                 if self.device is None:
@@ -778,6 +832,8 @@ class MainFrame(wx.Frame):
             wf = x.waveform_choice.GetStringSelection()
             if waveform == wf:
                 x.set_modified()
+        if oscgui_config['Waveform']['realtime_update'] == 'True':
+            self.on_update(None)
         self.Thaw()
 
     def update_wf_list(self):

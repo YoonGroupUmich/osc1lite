@@ -46,7 +46,7 @@ class ChannelInfo:
 
 class OSC1Lite:
     _bit_file_sha256sum = (
-        'c658656e373800a8d6f6ccfbc89d7dd3301cddd595784f97ed171f7a36028474')
+        '3223e14c5cf32ed877a760654266d659a207b9bac05310cafa6fda4fccd6316e')
 
     @staticmethod
     def _sha256sum(filename: str, block_size=2 ** 22):
@@ -80,8 +80,8 @@ class OSC1Lite:
             logging.getLogger('OSC1Lite').error('Bit file hash mismatch')
             if not ignore_hash_error:
                 raise ValueError(
-                    'Bit file sha256sum mismatch. ' +
-                    'Expected: ' + self._bit_file_sha256sum + ', ' +
+                    'Bit file corrupted. ' +
+                    'Expected SHA256: ' + self._bit_file_sha256sum + ', ' +
                     'Got: ' + sha256)
 
         # Configure the FPGA
@@ -141,7 +141,7 @@ class OSC1Lite:
             pll.SetOutputSource(0, pll.ClkSrc_Div1ByN)
             pll.SetOutputEnable(0, True)
             self.dev.SetPLL22150Configuration(pll)
-            logging.getLogger('OSC1Lite.PLL').info(
+            logging.getLogger('OSC1Lite.PLL').debug(
                 'PLL output freq = {freq}MHz'.format(
                     freq=pll.GetOutputFrequency(0)))
 
@@ -174,7 +174,7 @@ class OSC1Lite:
         word_pw = 0 if word < 0 else 0xffff if word > 0xfffff else word
         word = round(data.wf.period / (2 ** 7) * self._freq)
         word_period = 0 if word < 0 else 0xffff if word > 0xfffff else word
-        word = round(data.wf.amp / 24000 * 65536)
+        word = round(data.wf.amp / 20000 * 65536)
         word_amp = 0 if word < 0 else 0xffff if word > 0xffff else word
         with self.device_lock:
             self._write_to_wire_in(0x03, word_pw & 0xffff, update=False)
