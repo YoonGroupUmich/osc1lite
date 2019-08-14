@@ -155,7 +155,7 @@ class ChannelCtrl:
 
     def on_waveform_choice(self, event: wx.Event):
         self.set_modified()
-        if oscgui_config['Waveform']['realtime_update'] == 'True':
+        if oscgui_config['Waveform']['realtime_update'] == 'yes':
             self.mf.on_update(None)
 
 
@@ -174,21 +174,21 @@ class SquareWavePanel(wx.FlexGridSizer):
         self.period = 0  # ms
         self.rise_time = 0  # ms
 
-        self.amp_text = wx.TextCtrl(parent, -1, '0',
+        self.amp_text = wx.TextCtrl(parent, -1, '0.0',
                                     style=wx.TE_PROCESS_ENTER)
         self.amp_text.SetToolTip(
             'Range: 0~100\u03bcA, Precision: \u00b10.31\u03bcA')
         self.amp_text.Bind(wx.EVT_KILL_FOCUS, self.on_amp)
         self.amp_text.Bind(wx.EVT_TEXT_ENTER, self.on_amp)
         self.Add(self.amp_text, 0, wx.EXPAND)
-        self.period_text = wx.TextCtrl(parent, -1, '0',
+        self.period_text = wx.TextCtrl(parent, -1, '0.000',
                                        style=wx.TE_PROCESS_ENTER)
         self.period_text.SetToolTip(
             'Range: 0~17.9s, Precision: \u00b18.6\u03bcs')
         self.period_text.Bind(wx.EVT_KILL_FOCUS, self.on_period)
         self.period_text.Bind(wx.EVT_TEXT_ENTER, self.on_period)
         self.Add(self.period_text, 0, wx.EXPAND)
-        self.pw_text = wx.TextCtrl(parent, -1, '0', style=wx.TE_PROCESS_ENTER)
+        self.pw_text = wx.TextCtrl(parent, -1, '0.000', style=wx.TE_PROCESS_ENTER)
         self.pw_text.SetToolTip(
             'Range: 0~period, Precision: \u00b18.6\u03bcs')
         self.pw_text.Bind(wx.EVT_KILL_FOCUS, self.on_pulse_width)
@@ -220,10 +220,8 @@ class SquareWavePanel(wx.FlexGridSizer):
             self.amp_text.SetValue(str(self.amp))
             event.Skip()
             return
-        if val > 100:
-            val = 100
         word = round(val / 20000 * 65536)
-        word = 0 if word < 0 else 0xffff if word > 0xffff else word
+        word = 0 if word < 0 else 327 if word > 327 else word
         val = word / 65536 * 20000
         if self.amp != val:
             self.amp = val
@@ -673,7 +671,7 @@ class MainFrame(wx.Frame):
 
         extra_buttons = wx.BoxSizer(wx.HORIZONTAL)
 
-        if oscgui_config['Waveform']['realtime_update'] != 'True':
+        if oscgui_config['Waveform']['realtime_update'] != 'yes':
             update_all = wx.Button(p, -1, 'Update all channel parameters')
             update_all.SetToolTip(
                 'This will update all waveform parameters, '
@@ -748,7 +746,7 @@ class MainFrame(wx.Frame):
                     data.ext_trig = 0
                     if self.device is not None:
                         self.device.set_channel(ch, data)
-            if oscgui_config['Waveform']['realtime_update'] != 'True':
+            if oscgui_config['Waveform']['realtime_update'] != 'yes':
                 logging.getLogger('OSCGUI').info(
                     'Waveform updated: %s',
                     ', '.join(self.channels_ui[ch].channel_name for ch in chs))
@@ -760,7 +758,7 @@ class MainFrame(wx.Frame):
                         'Channel(s) disabled due to waveform change: %s',
                         ', '.join(disabled_list))
 
-        elif oscgui_config['Waveform']['realtime_update'] != 'True':
+        elif oscgui_config['Waveform']['realtime_update'] != 'yes':
             logging.getLogger('OSCGUI').info(
                 'Channels already up to date')
 
@@ -778,7 +776,7 @@ class MainFrame(wx.Frame):
                         bit_file='OSC1_LITE_Control.bit',
                         ignore_hash_error=oscgui_config[
                                               'OSC1Lite'][
-                                              'bitfile_integrity_check'] == 'True')
+                                              'bitfile_integrity_check'] == 'yes')
                 except OSError as e:
                     wx.MessageBox(str(e), 'Connect failed',
                                   wx.OK | wx.CENTRE | wx.ICON_ERROR)
@@ -803,7 +801,7 @@ class MainFrame(wx.Frame):
                 for x in self.board_relative_controls:
                     x.Enable()
                 logging.getLogger('OSCGUI').info('Connected')
-                if oscgui_config['Waveform']['realtime_update'] == 'True':
+                if oscgui_config['Waveform']['realtime_update'] == 'yes':
                     self.on_update(None)
                 self.Thaw()
             else:
@@ -837,7 +835,7 @@ class MainFrame(wx.Frame):
             wf = x.waveform_choice.GetStringSelection()
             if waveform == wf:
                 x.set_modified()
-        if oscgui_config['Waveform']['realtime_update'] == 'True':
+        if oscgui_config['Waveform']['realtime_update'] == 'yes':
             self.on_update(None)
         self.Thaw()
 
@@ -863,5 +861,17 @@ class MainFrame(wx.Frame):
 
 if __name__ == '__main__':
     app = wx.App()
+    if oscgui_config['OSCGUI']['warning_on_startup'] == 'yes':
+        dlg = wx.RichMessageDialog(
+            None,
+            'Do not turn off the power on board before clicking the Disconnect '
+            'button.\nOtherwise it will damage the uLED.', 'CAUTION',
+            style=wx.OK | wx.CENTRE | wx.ICON_EXCLAMATION)
+        dlg.ShowCheckBox("Don't show again")
+        dlg.ShowModal()
+        if dlg.IsCheckBoxChecked():
+            oscgui_config['OSCGUI']['warning_on_startup'] = 'no'
+            with open('config.ini', 'w') as fp:
+                oscgui_config.write(fp)
     MainFrame().Show()
     sys.exit(app.MainLoop())
