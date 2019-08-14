@@ -43,7 +43,7 @@ class ChannelCtrl:
         self.channel_label = channel_label
         self.channel_name = channel_label.GetLabel()
         self.waveform_choice = waveform_choice
-        self.waveform_choice.Bind(wx.EVT_CHOICE, lambda _: self.set_modified())
+        self.waveform_choice.Bind(wx.EVT_CHOICE, self.on_waveform_choice)
         self.trigger_choice = trigger_choice
         self.trigger_choice.Bind(wx.EVT_CHOICE, self.on_trigger_source)
         self.continuous_toggle = continuous_toggle
@@ -152,6 +152,11 @@ class ChannelCtrl:
     def set_modified(self):
         self.modified = True
         self.channel_label.SetLabel('*' + self.channel_name)
+
+    def on_waveform_choice(self, event: wx.Event):
+        self.set_modified()
+        if oscgui_config['Waveform']['realtime_update'] == 'True':
+            self.mf.on_update(None)
 
 
 class SquareWavePanel(wx.FlexGridSizer):
