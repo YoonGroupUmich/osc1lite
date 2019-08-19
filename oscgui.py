@@ -188,7 +188,8 @@ class SquareWavePanel(wx.FlexGridSizer):
         self.period_text.Bind(wx.EVT_KILL_FOCUS, self.on_period)
         self.period_text.Bind(wx.EVT_TEXT_ENTER, self.on_period)
         self.Add(self.period_text, 0, wx.EXPAND)
-        self.pw_text = wx.TextCtrl(parent, -1, '0.000', style=wx.TE_PROCESS_ENTER)
+        self.pw_text = wx.TextCtrl(parent, -1, '0.000',
+                                   style=wx.TE_PROCESS_ENTER)
         self.pw_text.SetToolTip(
             'Range: 0~period, Precision: \u00b18.6\u03bcs')
         self.pw_text.Bind(wx.EVT_KILL_FOCUS, self.on_pulse_width)
