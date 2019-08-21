@@ -508,11 +508,11 @@ class MainFrame(wx.Frame):
                 'device closed unexpectedly')
             self.on_connect_worker(connect=False)
             return
-        warn = self.device.get_channel_warnings()
+        warn, inactivity = self.device.get_channel_warnings()
         status = self.device.status()
         overlap = [x for x in warn['Trigger Overlap'] if
-                   self.channels_ui[x].trigger_choice.GetSelection() == 1 or
-                   not self.channels_ui[x].continuous_toggle.GetValue()]
+                   self.channels_ui[x].trigger == 1 or
+                   not self.channels_ui[x].continuous]
         if overlap:
             logging.getLogger('OSCGUI').warning(
                 'Waveform restarted due to '
@@ -548,6 +548,11 @@ class MainFrame(wx.Frame):
             current_text = self.channels_ui[ch].status_text.GetValue()
             if target_text != current_text:
                 self.channels_ui[ch].status_text.SetValue(target_text)
+        if inactivity:
+            logging.getLogger('OSCGUI').info(
+                'Channel disabled due to 20s inactivity: %s',
+                ', '.join(self.channels_ui[x].channel_name for x in inactivity
+                          if x < 12))
 
     def __init__(self, parent=None, ident=-1):
         wx.Frame.__init__(
@@ -775,9 +780,9 @@ class MainFrame(wx.Frame):
                 try:
                     self.device.configure(
                         bit_file='OSC1_LITE_Control.bit',
-                        ignore_hash_error=oscgui_config[
-                                              'OSC1Lite'][
-                                              'bitfile_integrity_check'] == 'yes')
+                        ignore_hash_error=
+                        oscgui_config['OSC1Lite'][
+                            'bitfile_integrity_check'] != 'yes')
                 except OSError as e:
                     wx.MessageBox(str(e), 'Connect failed',
                                   wx.OK | wx.CENTRE | wx.ICON_ERROR)
