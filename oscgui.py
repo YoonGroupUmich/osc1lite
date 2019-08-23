@@ -508,9 +508,9 @@ class MainFrame(wx.Frame):
                 'device closed unexpectedly')
             self.on_connect_worker(connect=False)
             return
-        warn, inactivity = self.device.get_channel_warnings()
+        warn, overlap, inactivity = self.device.get_channel_warnings()
         status = self.device.status()
-        overlap = [x for x in warn['Trigger Overlap'] if
+        overlap = [x for x in overlap if
                    self.channels_ui[x].trigger == 1 or
                    not self.channels_ui[x].continuous]
         if overlap:
@@ -523,8 +523,7 @@ class MainFrame(wx.Frame):
             for ch in chs:
                 logging.getLogger('OSCGUI').debug(
                     'Board reported: [Channel %d] %s' % (ch, x))
-                if x != 'Trigger Overlap':
-                    channel_warnings[ch].append(x)
+                channel_warnings[ch].append(x)
         for ch, x in enumerate(channel_warnings):
             if ch >= 12:
                 continue

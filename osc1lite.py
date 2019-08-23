@@ -46,7 +46,7 @@ class ChannelInfo:
 
 class OSC1Lite:
     _bit_file_sha256sum = (
-        'd64ccc8661f224515f32a5ce9cb922717b1d0ea57748504481419deb4deb1a90')
+        '3f95b26af3139fed46b55d1cdc358e4fb2ba9c25113768cc15d7f3e30f35a5fb')
 
     @staticmethod
     def _sha256sum(filename: str, block_size=2 ** 22):
@@ -247,26 +247,28 @@ class OSC1Lite:
     def get_channel_warnings(self):
         with self.device_lock:
             self.dev.UpdateTriggerOuts()
-            return {
-                       'Trigger Overlap': [i for i in range(16) if
-                                           self.dev.IsTriggered(0x6a, 1 << i)],
-                       'DAC die temperature over 142 degC': [
-                           i for i in range(16) if self.dev.IsTriggered(
-                               0x6b + i // 3, 1 << (i % 3 * 5))],
-                       'DAC code is slewing': [
-                           i for i in range(16) if self.dev.IsTriggered(
-                               0x6b + i // 3, 1 << (i % 3 * 5 + 1))],
-                       'DAC open circuit or compliance voltage violation': [
-                           i for i in range(16) if self.dev.IsTriggered(
-                               0x6b + i // 3, 1 << (i % 3 * 5 + 2))],
-                       'DAC watchdog timer timeout': [
-                           i for i in range(16) if self.dev.IsTriggered(
-                               0x6b + i // 3, 1 << (i % 3 * 5 + 3))],
-                       'DAC SPI CRC error': [
-                           i for i in range(16) if self.dev.IsTriggered(
-                               0x6b + i // 3, 1 << (i % 3 * 5 + 4))]
-                   }, [i for i in range(16) if
-                       self.dev.IsTriggered(0x69, 1 << i)]
+            return (
+                {
+                    'DAC die temperature over 142 degC': [
+                        i for i in range(12) if self.dev.IsTriggered(
+                            0x6b + i // 3, 1 << (i % 3 * 5))],
+                    'DAC code is slewing': [
+                        i for i in range(12) if self.dev.IsTriggered(
+                            0x6b + i // 3, 1 << (i % 3 * 5 + 1))],
+                    'DAC open circuit or compliance voltage violation': [
+                        i for i in range(12) if self.dev.IsTriggered(
+                            0x6b + i // 3, 1 << (i % 3 * 5 + 2))],
+                    'DAC watchdog timer timeout': [
+                        i for i in range(12) if self.dev.IsTriggered(
+                            0x6b + i // 3, 1 << (i % 3 * 5 + 3))],
+                    'DAC SPI CRC error': [
+                        i for i in range(12) if self.dev.IsTriggered(
+                            0x6b + i // 3, 1 << (i % 3 * 5 + 4))]
+                },
+                # Trigger overlap
+                [i for i in range(12) if self.dev.IsTriggered(0x6a, 1 << i)],
+                # Idle timeout
+                [i for i in range(12) if self.dev.IsTriggered(0x69, 1 << i)])
 
     def set_trigger_source(self, ch, source):
         channel_bit = 0
