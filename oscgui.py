@@ -1,6 +1,7 @@
 #! /usr/bin/env python3.5
 
 import configparser
+import json
 import logging
 import matplotlib.pyplot as plt
 import os
@@ -149,6 +150,10 @@ class ChannelCtrl:
         self.modified = False
         self.channel_label.SetLabel(self.channel_name)
 
+    def to_dict(self):
+        return {'channel_name': self.channel_name, 'waveform': self.waveform,
+                'trigger': self.trigger, 'continuous': self.continuous}
+
     def set_modified(self):
         self.modified = True
         self.channel_label.SetLabel('*' + self.channel_name)
@@ -213,6 +218,10 @@ class SquareWavePanel(wx.FlexGridSizer):
                                        pw=self.pulse_width / 1000,
                                        period=self.period / 1000,
                                        mode=mode)
+
+    def to_dict(self):
+        return {'amp': self.amp, 'pulse_width': self.pulse_width,
+                'period': self.period, 'rise_time': self.rise_time}
 
     def on_amp(self, event: wx.Event):
         try:
@@ -309,12 +318,12 @@ class WaveFormPanel(wx.StaticBoxSizer):
         font = wx.Font(wx.FontInfo(10).Bold())
         self.label = label
         common = wx.BoxSizer(wx.HORIZONTAL)
-        waveform_type_choice = wx.Choice(p, -1,
-                                         choices=['Square / Trapezoid'])
+        self.waveform_type_choice = wx.Choice(p, -1,
+                                              choices=['Square / Trapezoid'])
         #                                choices=['Square Wave', 'Custom Wave'])
-        waveform_type_choice.SetSelection(0)
-        waveform_type_choice.Bind(wx.EVT_CHOICE, self.on_type)
-        common.Add(LabeledCtrl(waveform_type_choice, p,
+        self.waveform_type_choice.SetSelection(0)
+        self.waveform_type_choice.Bind(wx.EVT_CHOICE, self.on_type)
+        common.Add(LabeledCtrl(self.waveform_type_choice, p,
                                -1, 'Waveform Type'), 0, wx.ALL, 3)
         self.num_of_pulses = wx.SpinCtrl(p, -1, min=1, max=0xffff,
                                          style=wx.TE_PROCESS_ENTER)
@@ -352,6 +361,13 @@ class WaveFormPanel(wx.StaticBoxSizer):
     def channel_info(self) -> osc1lite.ChannelInfo:
         wf = self.detail.get_waveform()
         return osc1lite.ChannelInfo(wf, n_pulses=self.num_of_pulses.GetValue())
+
+    def to_dict(self) -> dict:
+        ret = {'label': self.label,
+               'type': self.waveform_type_choice.GetStringSelection(),
+               'n_pulses': self.num_of_pulses.GetValue()}
+        ret.update(self.detail.to_dict())
+        return ret
 
     def on_preview(self, event: wx.Event):
         x_limit = 10
@@ -586,6 +602,23 @@ class MainFrame(wx.Frame):
 
         left_box = wx.BoxSizer(wx.VERTICAL)
         left_box.Add(setup_sizer, 0, wx.EXPAND)
+
+        # Config frame
+        config_sizer = wx.StaticBoxSizer(wx.HORIZONTAL, p,
+                                         'Waveform and Channel Config')
+        config_sizer.AddStretchSpacer(1)
+        save_config_button = wx.Button(p, -1, 'Save config to file')
+        save_config_button.Bind(wx.EVT_BUTTON, self.on_save_config)
+        config_sizer.Add(save_config_button, wx.SizerFlags().Expand())
+        config_sizer.AddStretchSpacer(1)
+        load_config_button = wx.Button(p, -1, 'Load config from file')
+        load_config_button.Bind(wx.EVT_BUTTON, self.on_load_config)
+        config_sizer.Add(load_config_button, wx.SizerFlags().Expand())
+        config_sizer.AddStretchSpacer(1)
+        self.board_relative_controls.extend(
+            (save_config_button, load_config_button))
+
+        left_box.Add(config_sizer, wx.SizerFlags().Expand())
         left_box.AddSpacer(50)
 
         self.wfm = WaveformManager(p, self)
@@ -862,6 +895,41 @@ class MainFrame(wx.Frame):
             if self.connect_button.GetLabel() != 'Connect':
                 self.device.set_enable(range(12), False)
                 self._dev.Close()
+
+    def on_save_config(self, event: wx.Event):
+        with wx.FileDialog(self, "Save config file",
+                           wildcard="JSON config files (*.json)|*.json",
+                           style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT) as fd:
+            if fd.ShowModal() == wx.ID_CANCEL:
+                return
+            pathname = fd.GetPath()
+            try:
+                with open(pathname, 'w') as fp:
+                    config = {'__version__': __version__,
+                              'waveform': [x.to_dict()
+                                           for x in self.wfm.waveform_panels],
+                              'channels': [x.to_dict()
+                                           for x in self.channels_ui]}
+                    json.dump(config, fp)
+                    logging.getLogger('OSCGUI').info(
+                        'Saved config file to ' + pathname)
+            except IOError:
+                logging.getLogger('OSCGUI').warning(
+                    'Failed to save config file')
+
+    def on_load_config(self, event: wx.Event):
+        with wx.FileDialog(self, "Load config file",
+                           wildcard="JSON config files (*.json)|*.json",
+                           style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST) as fd:
+            if fd.ShowModal() == wx.ID_CANCEL:
+                return
+            pathname = fd.GetPath()
+            try:
+                with open(pathname, 'r') as fp:
+                    ...
+            except IOError:
+                logging.getLogger('OSCGUI').warning(
+                    'Failed to load config file')
 
 
 if __name__ == '__main__':
