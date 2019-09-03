@@ -8,6 +8,7 @@ import os
 import sys
 import threading
 import time
+from typing import List
 import wx
 import wx.lib.scrolledpanel
 
@@ -154,6 +155,17 @@ class ChannelCtrl:
         return {'channel_name': self.channel_name, 'waveform': self.waveform,
                 'trigger': self.trigger, 'continuous': self.continuous}
 
+    def from_dict(self, d: dict):
+        if self.channel_name != d['channel_name']:
+            return
+        self.waveform_choice.SetSelection(
+            self.waveform_choice.FindString(d['waveform'], caseSensitive=True))
+        self.trigger_choice.SetSelection(d['trigger'])
+        self.continuous_toggle.SetValue(d['continuous'])
+        self.continuous_toggle.SetLabel(
+            'Continuous' if d['continuous'] else 'One-shot')
+        self.set_modified()
+
     def set_modified(self):
         self.modified = True
         self.channel_label.SetLabel('*' + self.channel_name)
@@ -165,7 +177,7 @@ class ChannelCtrl:
 
 
 class SquareWavePanel(wx.FlexGridSizer):
-    def __init__(self, parent, modify_callback):
+    def __init__(self, parent, modify_callback, init_dict=None):
         wx.FlexGridSizer.__init__(self, 2, 4, 5, 5)
         for i in range(4):
             self.AddGrowableCol(i, 1)
@@ -174,33 +186,45 @@ class SquareWavePanel(wx.FlexGridSizer):
         self.Add(wx.StaticText(parent, -1, 'Pulse Width (ms)'), 0, wx.EXPAND)
         self.Add(wx.StaticText(parent, -1, 'Rise Time (ms)'), 0, wx.EXPAND)
 
-        self.amp = 0  # uA
-        self.pulse_width = 0  # ms
-        self.period = 0  # ms
-        self.rise_time = 0  # ms
+        try:
+            self.amp = init_dict['amp']
+        except (TypeError, KeyError, ValueError):
+            self.amp = 0  # uA
+        try:
+            self.pulse_width = init_dict['pulse_width']
+        except (TypeError, KeyError, ValueError):
+            self.pulse_width = 0  # ms
+        try:
+            self.period = init_dict['period']
+        except (TypeError, KeyError, ValueError):
+            self.period = 0  # ms
+        try:
+            self.rise_time = init_dict['rise_time']
+        except (TypeError, KeyError, ValueError):
+            self.rise_time = 0  # ms
 
-        self.amp_text = wx.TextCtrl(parent, -1, '0.0',
+        self.amp_text = wx.TextCtrl(parent, -1, '%.1f' % self.amp,
                                     style=wx.TE_PROCESS_ENTER)
         self.amp_text.SetToolTip(
             'Range: 0~100\u03bcA, Precision: \u00b10.31\u03bcA')
         self.amp_text.Bind(wx.EVT_KILL_FOCUS, self.on_amp)
         self.amp_text.Bind(wx.EVT_TEXT_ENTER, self.on_amp)
         self.Add(self.amp_text, 0, wx.EXPAND)
-        self.period_text = wx.TextCtrl(parent, -1, '0.000',
+        self.period_text = wx.TextCtrl(parent, -1, '%.3f' % self.period,
                                        style=wx.TE_PROCESS_ENTER)
         self.period_text.SetToolTip(
             'Range: 0~17.9s, Precision: \u00b18.6\u03bcs')
         self.period_text.Bind(wx.EVT_KILL_FOCUS, self.on_period)
         self.period_text.Bind(wx.EVT_TEXT_ENTER, self.on_period)
         self.Add(self.period_text, 0, wx.EXPAND)
-        self.pw_text = wx.TextCtrl(parent, -1, '0.000',
+        self.pw_text = wx.TextCtrl(parent, -1, '%.3f' % self.pulse_width,
                                    style=wx.TE_PROCESS_ENTER)
         self.pw_text.SetToolTip(
             'Range: 0~period, Precision: \u00b18.6\u03bcs')
         self.pw_text.Bind(wx.EVT_KILL_FOCUS, self.on_pulse_width)
         self.pw_text.Bind(wx.EVT_TEXT_ENTER, self.on_pulse_width)
         self.Add(self.pw_text, 0, wx.EXPAND)
-        self.rise_time_text = wx.TextCtrl(parent, -1, '0',
+        self.rise_time_text = wx.TextCtrl(parent, -1, str(self.rise_time),
                                           style=wx.TE_PROCESS_ENTER)
         self.rise_time_text.SetToolTip(
             'Possible values: 0, 0.1, 0.5, 1, 2ms')
@@ -294,7 +318,7 @@ class SquareWavePanel(wx.FlexGridSizer):
 
 
 class CustomWavePanel(wx.BoxSizer):
-    def __init__(self, parent):
+    def __init__(self, parent, init_dict=None):
         wx.BoxSizer.__init__(self, wx.VERTICAL)
         self.Add(wx.StaticText(parent, -1, 'Custom Waveform File'), 0,
                  wx.EXPAND)
@@ -312,20 +336,30 @@ class CustomWavePanel(wx.BoxSizer):
 
 
 class WaveFormPanel(wx.StaticBoxSizer):
-    def __init__(self, parent, label, modify_callback):
+    def __init__(self, parent, label, modify_callback, init_dict=None):
         wx.StaticBoxSizer.__init__(self, wx.VERTICAL, parent, label)
         p = self.GetStaticBox()
         font = wx.Font(wx.FontInfo(10).Bold())
         self.label = label
         common = wx.BoxSizer(wx.HORIZONTAL)
-        self.waveform_type_choice = wx.Choice(p, -1,
-                                              choices=['Square / Trapezoid'])
-        #                                choices=['Square Wave', 'Custom Wave'])
-        self.waveform_type_choice.SetSelection(0)
+        wf_types = ['Square / Trapezoid']
+        self.waveform_type_choice = wx.Choice(p, -1, choices=wf_types)
+        try:
+            sel = wf_types.index(init_dict['type'])
+        except (TypeError, KeyError, ValueError):
+            sel = 0
+        self.waveform_type_choice.SetSelection(sel)
         self.waveform_type_choice.Bind(wx.EVT_CHOICE, self.on_type)
         common.Add(LabeledCtrl(self.waveform_type_choice, p,
                                -1, 'Waveform Type'), 0, wx.ALL, 3)
+        try:
+            n_pulses = int(init_dict['n_pulses'])
+            n_pulses = (1 if n_pulses < 1 else
+                        0xffff if n_pulses > 0xffff else n_pulses)
+        except (TypeError, KeyError, ValueError):
+            n_pulses = 1
         self.num_of_pulses = wx.SpinCtrl(p, -1, min=1, max=0xffff,
+                                         value=str(n_pulses),
                                          style=wx.TE_PROCESS_ENTER)
         self.num_of_pulses.Bind(wx.EVT_SPINCTRL,
                                 lambda _: modify_callback(self.label))
@@ -343,8 +377,9 @@ class WaveFormPanel(wx.StaticBoxSizer):
         self.delete_button.SetToolTip(wx.ToolTip('Delete waveform'))
         common.Add(self.delete_button, 0, wx.ALIGN_TOP | wx.ALL, 3)
         self.Add(common, 0, wx.EXPAND)
-        self.p_square = SquareWavePanel(p, lambda: modify_callback(self.label))
-        self.p_custom = CustomWavePanel(p)
+        self.p_square = SquareWavePanel(p, lambda: modify_callback(self.label),
+                                        init_dict=init_dict)
+        self.p_custom = CustomWavePanel(p, init_dict=init_dict)
         self.Add(self.p_square, 0, wx.EXPAND | wx.ALL, 3)
         self.Add(self.p_custom, 0, wx.EXPAND | wx.ALL, 3)
         self.Hide(self.p_custom)
@@ -420,14 +455,11 @@ class WaveformManager(wx.ScrolledWindow):
         wx.ScrolledWindow.__init__(self, parent, ident,
                                    style=wx.VSCROLL | wx.ALWAYS_SHOW_SB)
         self.box = wx.BoxSizer(wx.VERTICAL)
-        self.button_box = wx.BoxSizer(wx.HORIZONTAL)
-        self.button_box.AddStretchSpacer(1)
 
         new_wf = wx.Button(self, -1, 'Add New Waveform')
         new_wf.Bind(wx.EVT_BUTTON, self.on_new_wf)
-        self.button_box.Add(new_wf, 0, wx.EXPAND)
 
-        self.box.Add(self.button_box, 0, wx.EXPAND)
+        self.box.Add(new_wf, wx.SizerFlags().Right())
 
         self.cnt = 4
         self.waveform_panels = [WaveFormPanel(self, 'Waveform %d' % (x + 1),
@@ -459,8 +491,34 @@ class WaveformManager(wx.ScrolledWindow):
                     return
                 self.parent.Freeze()
                 del self.waveform_panels[idx]
-                self.box.Hide(x)
+                self.box.Detach(x)
+                x.GetStaticBox().DestroyChildren()
+                x.Destroy()
                 break
+        self.mf.update_wf_list()
+        self.parent.Layout()
+        self.parent.Thaw()
+
+    def from_dict(self, d: List[dict]):
+        self.parent.Freeze()
+        for x in self.waveform_panels:
+            self.box.Detach(x)
+            x.GetStaticBox().DestroyChildren()
+            x.Destroy()
+        self.waveform_panels = []
+        self.cnt = 0
+        for x in d:
+            # FIXME: get the cnt the dirty way
+            if x['label'].startswith('Waveform '):
+                try:
+                    self.cnt = max(self.cnt, int(x['label'][9:]))
+                except ValueError:
+                    pass
+            wf = WaveFormPanel(self, x['label'], self.mf.set_wf_modified,
+                               init_dict=x)
+            self.waveform_panels.append(wf)
+            self.box.Add(wf, 0, wx.EXPAND | wx.TOP | wx.BOTTOM, 5)
+        self.box.SetSizeHints(self)
         self.mf.update_wf_list()
         self.parent.Layout()
         self.parent.Thaw()
@@ -906,8 +964,8 @@ class MainFrame(wx.Frame):
             try:
                 with open(pathname, 'w') as fp:
                     config = {'__version__': __version__,
-                              'waveform': [x.to_dict()
-                                           for x in self.wfm.waveform_panels],
+                              'waveforms': [x.to_dict()
+                                            for x in self.wfm.waveform_panels],
                               'channels': [x.to_dict()
                                            for x in self.channels_ui]}
                     json.dump(config, fp)
@@ -926,10 +984,17 @@ class MainFrame(wx.Frame):
             pathname = fd.GetPath()
             try:
                 with open(pathname, 'r') as fp:
-                    ...
-            except IOError:
-                logging.getLogger('OSCGUI').warning(
-                    'Failed to load config file')
+                    config = json.load(fp)
+                if config['__version__'] != __version__:
+                    raise ValueError('Config file has incompatible version')
+                self.wfm.from_dict(config['waveforms'])
+                for x, y in zip(self.channels_ui, config['channels']):
+                    x.from_dict(y)
+            except (IOError, ValueError, KeyError) as e:
+                logging.getLogger('OSCGUI').error(
+                    'Failed to load config file: ' + repr(e))
+            if oscgui_config['Waveform']['realtime_update'] == 'yes':
+                self.on_update(None)
 
 
 if __name__ == '__main__':
