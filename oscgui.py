@@ -796,15 +796,32 @@ class MainFrame(wx.Frame):
         log_text = wx.TextCtrl(p, -1, style=wx.TE_MULTILINE | wx.TE_READONLY)
         sh = logging.StreamHandler(log_text)
         sh.setLevel(logging.INFO)
-        formatter = logging.Formatter(
+        self.formatter = logging.Formatter(
             '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-        sh.setFormatter(formatter)
+        sh.setFormatter(self.formatter)
         logging.getLogger().addHandler(sh)
         log_box = wx.StaticBoxSizer(wx.VERTICAL, p, 'Log')
         log_box.Add(log_text, 1, wx.EXPAND)
+
+        log_options_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        log_options_sizer.AddStretchSpacer(1)
+        save_log_checkbox = wx.CheckBox(p, -1, 'Save log to file')
+        save_log_checkbox.Bind(wx.EVT_CHECKBOX, self.on_save_log)
+
+        if oscgui_config['OSCGUI']['save_log_to_file'] == 'yes':
+            save_log_checkbox.SetValue(True)
+            self.log_fh = logging.FileHandler(
+                time.strftime('oscgui-%Y%m%d.log'), delay=True)
+            self.log_fh.setLevel(logging.INFO)
+            self.log_fh.setFormatter(self.formatter)
+            logging.getLogger().addHandler(self.log_fh)
+        else:
+            self.log_fh = None
         clear_log_button = wx.Button(p, -1, 'Clear Log')
         clear_log_button.Bind(wx.EVT_BUTTON, lambda _: log_text.Clear())
-        log_box.Add(clear_log_button, 0, wx.EXPAND)
+        log_options_sizer.Add(save_log_checkbox, wx.SizerFlags().Expand())
+        log_options_sizer.Add(clear_log_button, wx.SizerFlags().Expand())
+        log_box.Add(log_options_sizer, wx.SizerFlags().Expand())
         right_box.Add(log_box, 1, wx.EXPAND)
 
         box = wx.BoxSizer(wx.HORIZONTAL)
@@ -818,6 +835,29 @@ class MainFrame(wx.Frame):
         p.SetSizerAndFit(box)
         self.Fit()
         self.Bind(wx.EVT_CLOSE, self.on_close)
+
+    def on_save_log(self, event: wx.Event):
+        obj = event.GetEventObject()
+        assert isinstance(obj, wx.CheckBox)
+        if obj.GetValue():
+            oscgui_config['OSCGUI']['save_log_to_file'] = 'yes'
+            with open('config.ini', 'w') as fp:
+                oscgui_config.write(fp)
+            if self.log_fh is None:
+                self.log_fh = logging.FileHandler(
+                    time.strftime('oscgui-%Y%m%d.log'), delay=True)
+                self.log_fh.setLevel(logging.INFO)
+                self.log_fh.setFormatter(self.formatter)
+                logging.getLogger().addHandler(self.log_fh)
+
+        else:
+            oscgui_config['OSCGUI']['save_log_to_file'] = 'no'
+            with open('config.ini', 'w') as fp:
+                oscgui_config.write(fp)
+            if self.log_fh:
+                logging.getLogger().removeHandler(self.log_fh)
+                self.log_fh.close()
+                self.log_fh = None
 
     def on_trigger_out(self, event: wx.Event):
         ident = event.GetId()
