@@ -42,6 +42,7 @@ reg			output_en_proposed;
 wire		next_output_en;
 wire		next_output_en_proposed;
 reg	 [23:0] alarm;
+wire [15:0] amp_offset;
 
 assign shift_counter_helper = ~counter + 5'd24;  // (0 -> 23, 1 -> 22, etc.)
 assign next_output_en = output_en;
@@ -50,6 +51,7 @@ assign channel_is_disable = ~output_en;
 assign alarm_out = alarm[4:0];
 assign clear = clear_request; 	// assign OK clr DAC pin control to clr DAC register. 
 assign sclk = ((counter >= 5'd24) | (full_command_one_period == full_command_one_period_prev) )? 0 :clk;
+assign amp_offset = data_from_user + (328-3);
 
 assign mode = ((output_en != output_en_proposed) && (output_en_proposed == 1'b0)) ? 3'b110		// write control, output disable
 			: ((output_en != output_en_proposed) && (output_en_proposed == 1'b1)) ? 3'b011		// write control, output enable
@@ -77,7 +79,7 @@ assign full_command = //(mode == 3'b010) ?  {address_byte, 16'b0000000000000010}
 					: (mode == 3'b000) ?  {address_byte, 16'b0000000000000000} // NOP
 					: (mode == 3'b111) ?  {address_byte, 16'b0000000000000000} // read status register
 					:  pipe ? {address_byte, data_from_memory} 
-					: {address_byte, data_from_user};			// if write, {address_byte -> [23:16], data_from_user -> [15:0]}
+					: {address_byte, amp_offset};			// if write, {address_byte -> [23:16], data_from_user -> [15:0]}
 
 assign spi_pipe_clk = (counter == 5'd29);
 
