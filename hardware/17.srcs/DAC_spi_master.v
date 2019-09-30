@@ -19,6 +19,8 @@ module spi_controller(
 	input  wire 		no_trig,			// 1 if the channel is paused (wait for trigger) for 20 seconds
 	input  wire 		channel_disable,	// 1 if request to disable the channel
 	input  wire 		channel_enable,		// 1 if request to enable the channel
+	input  wire [15:0]  channel_gain,
+	input  wire [15:0]  channel_zero,
 
 	output wire			clear,				// DAC input clr
 	output reg			latch,				// DAC input latch
@@ -51,10 +53,9 @@ assign channel_is_disable = ~output_en;
 assign alarm_out = alarm[4:0];
 assign clear = clear_request; 	// assign OK clr DAC pin control to clr DAC register. 
 assign sclk = ((counter >= 5'd24) | (full_command_one_period == full_command_one_period_prev) )? 0 :clk;
-assign amp_offset = data_from_user + (328-3);
+assign amp_offset = data_from_user + 328;
 
-assign mode = ((output_en != output_en_proposed) && (output_en_proposed == 1'b0)) ? 3'b110		// write control, output disable
-			: ((output_en != output_en_proposed) && (output_en_proposed == 1'b1)) ? 3'b011		// write control, output enable
+assign mode = (output_en != output_en_proposed) ? 3'b011  // write control, output enable / disable
 			: (counter2spi == 2) ? 3'b111		// DAC read status register
 			: (counter2spi == 3) ? 3'b000		// NOP
 			: mode_pc;							// DAC write
@@ -62,20 +63,20 @@ assign mode = ((output_en != output_en_proposed) && (output_en_proposed == 1'b0)
 assign address_byte = (mode == 3'b001) ? 8'b00000001 		// wirte (See dac8750 Page 32, 33)
 					//: (mode == 3'b010) ? 8'b00000010        // read
 					: (mode == 3'b011) ? 8'b01010101        // write control, output enable
-					: (mode == 3'b110) ? 8'b01010101        // write control, output disable			
+					// : (mode == 3'b110) ? 8'b01010101        // write control, output disable
 					: (mode == 3'b100) ? 8'b01010110        // write reset
-					: (mode == 3'b101) ? 8'b01010111        // write config
-					//: (mode == 3'b110) ? 8'b01011000      // write DAC gain calibration, not used here
-					: (mode == 3'b010) ? 8'b01011001      // write DAC zero calibration, not used here
+					: (mode == 3'b101) ? 8'h57        // write config
+					: (mode == 3'b110) ? 8'b01011000  // write DAC gain calibration
+					: (mode == 3'b010) ? 8'b01011001  // write DAC zero calibration
 					: (mode == 3'b111) ? 8'b00000010		// read status register
 					: 8'b0;			
 															
 assign full_command = //(mode == 3'b010) ?  {address_byte, 16'b0000000000000010} // if read, set read DAC config register
-					  (mode == 3'b010) ?  {address_byte, 16'b1111111111111111} // DAC zero calibration
+					  (mode == 3'b010) ? {address_byte, channel_zero}  // DAC zero calibration
+					: (mode == 3'b110) ? {address_byte, channel_gain}  // DAC gain calibration
 					: (mode == 3'b100) ?  {address_byte, 16'b0000000000000001} // if reset, set RST bit to 1
-					: (mode == 3'b011) ?  {address_byte, 16'b0001000000000110} // if set control, output enable, full_command = 24'h551007
-					: (mode == 3'b110) ?  {address_byte, 16'b0000000000000110} // if set control, output disable, full_command = 24'h550007
-					: (mode == 3'b101) ?  {address_byte, 16'b0000000000000000} // if config, set WD bits to 0
+					: (mode == 3'b011) ? {address_byte, 3'b000, output_en_proposed, 12'b000000000110}  // Set enable / disable output
+					: (mode == 3'b101) ? {address_byte, 16'b0000000000100000} // if config, set WD bits to 0
 					: (mode == 3'b000) ?  {address_byte, 16'b0000000000000000} // NOP
 					: (mode == 3'b111) ?  {address_byte, 16'b0000000000000000} // read status register
 					:  pipe ? {address_byte, data_from_memory} 

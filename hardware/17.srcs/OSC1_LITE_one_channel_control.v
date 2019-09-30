@@ -59,6 +59,9 @@ reg [239:0] wave_period;
 reg [191:0] wave_number_of_pulse;
 reg [11:0] 	external_trigger_valid;
 
+reg [191:0]  user_gain;
+reg [191:0]  user_zero;
+
 // data from GUI
 wire [15:0] data_from_user_pulse_width;
 wire [15:0] data_from_user_period;
@@ -71,6 +74,8 @@ wire [15:0] data_from_user_disable;
 wire [15:0] data_from_user_enable;
 wire [15:0] data_from_user_trig_source;
 wire [15:0] data_from_user_trig_mode;
+wire [15:0] data_from_user_gain;
+wire [15:0] data_from_user_zero;
 
 // Instantiation wire
 wire [11:0] trig_out_valid;
@@ -163,6 +168,8 @@ always @ (posedge data_trigger) begin
 	wave_period[(20*addr+16) +: 4] = data_from_user_pulse_period[11:8];
 	option[4*addr +: 4] = data_mode;
 	wave_number_of_pulse[16*addr +: 16] = data_from_user_number_of_pulse;
+	user_gain[16*addr +: 16] = data_from_user_gain;
+	user_zero[16*addr +: 16] = data_from_user_zero;
 end
 
 read_input calc[11:0](
@@ -218,6 +225,8 @@ spi_controller dac_spi0 [11:0](
 	.no_trig(no_trig[11:0]),
 	.channel_disable(channel_disable[11:0]),
 	.channel_enable(channel_enable[11:0]),
+	.channel_gain(user_gain),
+	.channel_zero(user_zero),
 	// output
 	.clear(clear),	
 	.latch(latch),	
@@ -262,6 +271,8 @@ okWireIn	wi08 (.ok1(ok1), .ep_addr(8'h08), .ep_dataout(data_from_user_trig_sourc
 okWireIn	wi09 (.ok1(ok1), .ep_addr(8'h09), .ep_dataout(data_from_user_trig_out_valid[15:0])); 	// 0 is not valid, 1 is valid
 okWireIn	wi0a (.ok1(ok1), .ep_addr(8'h0a), .ep_dataout(data_from_user_pulse_period[15:0]));
 okWireIn	wi0b (.ok1(ok1), .ep_addr(8'h0b), .ep_dataout(data_from_user_trig_mode[15:0])); 		// 0 is one-shot, 1 is continuous
+okWireIn	wi0c (.ok1(ok1), .ep_addr(8'h0c), .ep_dataout(data_from_user_gain[15:0]));
+okWireIn	wi0d (.ok1(ok1), .ep_addr(8'h0d), .ep_dataout(data_from_user_zero[15:0]));
 okWireIn	wi15 (.ok1(ok1), .ep_addr(8'h15), .ep_dataout(period[15:0]));
 okWireIn	wi16 (.ok1(ok1), .ep_addr(8'h16), .ep_dataout(num_of_pulses[15:0]));
 okWireIn	wi17 (.ok1(ok1), .ep_addr(8'h17), .ep_dataout({sys_ctrl_pad4, div_mode}));
