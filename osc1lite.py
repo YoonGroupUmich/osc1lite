@@ -46,7 +46,7 @@ class ChannelInfo:
 
 class OSC1Lite:
     _bit_file_sha256sum = (
-        '3f95b26af3139fed46b55d1cdc358e4fb2ba9c25113768cc15d7f3e30f35a5fb')
+        '057d59108630c00a9e6ddf2076e95490deb6cb8d9ab015f7c5903e8d550ba5da')
 
     @staticmethod
     def _sha256sum(filename: str, block_size=2 ** 22):
@@ -164,7 +164,7 @@ class OSC1Lite:
             self._write_to_wire_in(0x00, 1)
             self._write_to_wire_in(0x00, 0)
 
-    def set_channel(self, channel, data: ChannelInfo):
+    def set_channel(self, channel, data: ChannelInfo, calib=None):
         logging.getLogger('OSC1Lite').debug(
             'Sending params for channel %d', channel)
         logging.getLogger('OSC1Lite').debug(
@@ -184,6 +184,20 @@ class OSC1Lite:
             self._write_to_wire_in(
                 0x0a, (word_pw >> 16) | ((word_period >> 8) & 0x0f00),
                 update=False)
+            if calib is None:
+                gain = 0x8000
+                zero = 0x0000
+            else:
+                t10, t90 = calib
+                # c10 = 33, c90 = 295
+                t90 = t90 * 10 / 20000 * 65536
+                t10 = t10 * 10 / 20000 * 65536
+                k = (t90 - t10) / 262
+                b = ((t90 + t10 + 655.36) - 328 * 3 * k) / 2
+                gain = 1 / k * (2 ** 16) - (2 ** 15)
+                zero = - b / k
+            self._write_to_wire_in(0x0c, round(gain) & 0xffff, update=False)
+            self._write_to_wire_in(0x0d, round(zero) & 0xffff, update=False)
             self._write_to_wire_in(
                 0x06, data.wf.mode | (channel << 4) | (data.ext_trig << 9),
                 update=True)
@@ -191,7 +205,7 @@ class OSC1Lite:
             # Send data update trigger
             self._write_to_wire_in(0x06, 0x0100, mask=0x0100, update=True)
 
-    def reset(self):
+    def reset(self, calib):
         with self.device_lock:
             for channel in range(0x20):
                 self._write_to_wire_in(channel, 0, update=False)
@@ -200,13 +214,14 @@ class OSC1Lite:
             self.reset_dac()
             self.reset_pipe()
             for i in range(12):
-                self.set_channel(i, ChannelInfo(SquareWaveform()))
+                self.set_channel(i, ChannelInfo(SquareWaveform()), calib[i])
         logging.getLogger('OSC1Lite').info('Reset done')
 
     def init_dac(self):
         with self.device_lock:
             self._write_to_wire_in(0x01, 5)
-            # self._write_to_wire_in(0x01, 3)
+            self._write_to_wire_in(0x01, 6)
+            self._write_to_wire_in(0x01, 2)
             self._write_to_wire_in(0x01, 0)
 
     def enable_dac_output(self):

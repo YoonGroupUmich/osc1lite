@@ -637,6 +637,7 @@ class MainFrame(wx.Frame):
         self.devices = {}
 
         self.board_relative_controls = []
+        self.calib = [None for _ in range(12)]
 
         p = wx.Panel(self, -1)
 
@@ -881,7 +882,7 @@ class MainFrame(wx.Frame):
                     data = self.wfm.waveform_panels[wf].channel_info()
                     data.ext_trig = 0
                     if self.device is not None:
-                        self.device.set_channel(ch, data)
+                        self.device.set_channel(ch, data, self.calib[ch])
             if oscgui_config['Waveform']['realtime_update'] != 'yes':
                 logging.getLogger('OSCGUI').info(
                     'Waveform updated: %s',
@@ -905,7 +906,8 @@ class MainFrame(wx.Frame):
             if connect:
                 if self.device is not None:
                     return
-                self._dev.OpenBySerial(self.device_choice.GetStringSelection())
+                serial = self.device_choice.GetStringSelection()
+                self._dev.OpenBySerial(serial)
                 self.device = osc1lite.OSC1Lite(self._dev)
                 try:
                     self.device.configure(
@@ -925,7 +927,18 @@ class MainFrame(wx.Frame):
                     self.device = None
                     self._dev.Close()
                     return
-                self.device.reset()
+                try:
+                    with open('calib/' + serial + '.calib') as fp:
+                        self.calib = []
+                        for _ in range(12):
+                            s = next(fp).strip().split(None, 1)
+                            self.calib.append((float(s[0]), float(s[1])))
+                except:
+                    self.calib = [None for _ in range(12)]
+                    logging.getLogger('OSCGUI').warning(
+                        'Calibration data for board %s not found.'
+                        'Running in uncalibrated mode.', serial)
+                self.device.reset(self.calib)
                 self.device.init_dac()
                 self.device.enable_dac_output()
                 self.Freeze()
