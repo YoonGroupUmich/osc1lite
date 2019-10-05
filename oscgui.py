@@ -630,8 +630,7 @@ class MainFrame(wx.Frame):
     def __init__(self, parent=None, ident=-1):
         wx.Frame.__init__(
             self, parent, ident,
-            'OSC1Lite Stimulate GUI v' + __version__ +
-            '  ** CLICK DISCONNECT BEFORE TURNING OFF BOARD SWITCH **')
+            'OSC1Lite Stimulate GUI v' + __version__)
         self._dev = ok.okCFrontPanel()
         self.device = None
         self.devices = {}
