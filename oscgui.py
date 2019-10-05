@@ -930,8 +930,17 @@ class MainFrame(wx.Frame):
                     with open('calib/' + serial + '.calib') as fp:
                         self.calib = []
                         for _ in range(12):
-                            s = next(fp).strip().split(None, 1)
-                            self.calib.append((float(s[0]), float(s[1])))
+                            s = next(fp).strip().split(None, 2)
+                            s[0] = float(s[0])
+                            s[1] = float(s[1])
+                            if len(s) == 3:
+                                s[2] = float(s[2])
+                                s[0] /= s[2]
+                                s[1] /= s[2]
+                            else:
+                                s[0] /= 100
+                                s[1] /= 100
+                            self.calib.append(s[0:2])
                 except:
                     self.calib = [None for _ in range(12)]
                     logging.getLogger('OSCGUI').warning(
