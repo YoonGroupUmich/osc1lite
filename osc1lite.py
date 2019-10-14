@@ -13,7 +13,7 @@ class Waveform:
 
 class SquareWaveform(Waveform):
 
-    def __init__(self, mode=0, amp=0., pw=0., period=.001):
+    def __init__(self, mode=0, amp=0., pw=0., period=0.):
         """
         mode controls the rising/falling edge width
         amp controls the wave amplitude
@@ -41,12 +41,12 @@ class ChannelInfo:
         """
         self.wf = waveform
         self.n_pulses = n_pulses  # set n_pulses to 0 for continuous output
-        self.ext_trig = ext_trig  # 0: PC trigger, 1: external trigger
+        self.ext_trig = ext_trig  # deprecated
 
 
 class OSC1Lite:
     _bit_file_sha256sum = (
-        '057d59108630c00a9e6ddf2076e95490deb6cb8d9ab015f7c5903e8d550ba5da')
+        '8800a6bdfe0479c138905f2c88470281252b434df39e98fea404f6087af066e6')
 
     @staticmethod
     def _sha256sum(filename: str, block_size=2 ** 22):

@@ -54,8 +54,12 @@ class ChannelCtrl:
         trigger_button.Bind(wx.EVT_BUTTON,
                             lambda _: mf.device.trigger_channel(ch))
         self.stop_button = stop_button
-        self.stop_button.Bind(wx.EVT_BUTTON, lambda evt: mf.device.set_enable(
-            ch, stop_button.GetLabel() == 'Enable'))
+        if oscgui_config['OSCGUI']['channel_auto_enable'] == 'yes':
+            self.stop_button.Bind(wx.EVT_BUTTON, self.on_stop)
+        else:
+            self.stop_button.Bind(wx.EVT_BUTTON,
+                                  lambda evt: mf.device.set_enable(
+                                      ch, stop_button.GetLabel() == 'Enable'))
         self.trigger_out_check = trigger_out_check
         self.status_text = status_text
 
@@ -85,7 +89,8 @@ class ChannelCtrl:
         self.continuous_toggle.SetLabel('One-shot')
         self.continuous_toggle.SetValue(False)
         self.stop_button.Disable()
-        self.stop_button.SetLabel('Enable')
+        if oscgui_config['OSCGUI']['channel_auto_enable'] != 'yes':
+            self.stop_button.SetLabel('Enable')
         self.trigger_button.Disable()
         self.trigger_out_check.Disable()
         self.trigger_out_check.SetValue(False)
@@ -102,6 +107,8 @@ class ChannelCtrl:
             return self._disabled_color, 'Disabled'
         if self.output:
             return self._normal_color, 'Normal'
+        if oscgui_config['OSCGUI']['channel_auto_enable'] == 'yes':
+            return self._disabled_color, 'Stopped'
         return self._disabled_color, 'Paused (Ready for trigger)'
 
     @property
@@ -112,7 +119,8 @@ class ChannelCtrl:
     def enabled(self, val):
         if self._enabled != val:
             self._enabled = val
-            self.stop_button.SetLabel('Disable' if val else 'Enable')
+            if oscgui_config['OSCGUI']['channel_auto_enable'] != 'yes':
+                self.stop_button.SetLabel('Disable' if val else 'Enable')
             if val and not self.trigger:
                 self.trigger_button.Enable()
             else:
@@ -174,6 +182,20 @@ class ChannelCtrl:
         self.set_modified()
         if oscgui_config['Waveform']['realtime_update'] == 'yes':
             self.mf.on_update(None)
+
+    def on_stop(self, event: wx.Event):
+        self.mf.device.set_channel(self.ch, osc1lite.ChannelInfo(
+                osc1lite.SquareWaveform()))
+        self.mf.device.set_trigger_source(self.ch, False)
+        self.mf.device.set_trigger_mode(self.ch, False)
+        self.stopped = True
+        self.mf.device.trigger_channel(self.ch)
+
+        wf = self.waveform_choice.GetSelection()
+        data = self.mf.wfm.waveform_panels[wf].channel_info()
+        self.mf.device.set_channel(self.ch, data, self.mf.calib[self.ch])
+        self.mf.device.set_trigger_source(self.ch, self.trigger)
+        self.mf.device.set_trigger_mode(self.ch, self.continuous)
 
 
 class SquareWavePanel(wx.FlexGridSizer):
@@ -255,7 +277,8 @@ class SquareWavePanel(wx.FlexGridSizer):
             event.Skip()
             return
         word = round(val / 20000 * 65536)
-        word = 0 if word < 0 else 327 if word > 327 else word
+        amp_limit = 327
+        word = 0 if word < 0 else amp_limit if word > amp_limit else word
         val = word / 65536 * 20000
         if self.amp != val:
             self.amp = val
@@ -429,7 +452,6 @@ class WaveFormPanel(wx.StaticBoxSizer):
             ys = wf.wave
         else:
             raise TypeError('Waveform type not supported')
-        print(xs, ys)
         plt.plot(xs, ys, label=self.label)
         plt.xlabel('time (ms)')
         plt.ylabel('amplitude (\u03bcA)')
@@ -583,15 +605,9 @@ class MainFrame(wx.Frame):
             self.on_connect_worker(connect=False)
             return
         warn, overlap, inactivity = self.device.get_channel_warnings()
-        status = self.device.status()
         overlap = [x for x in overlap if
                    self.channels_ui[x].trigger == 1 or
                    not self.channels_ui[x].continuous]
-        if overlap:
-            logging.getLogger('OSCGUI').warning(
-                'Waveform restarted due to '
-                'asynchronous trigger on: %s',
-                ', '.join(self.channels_ui[x].channel_name for x in overlap))
         channel_warnings = [[] for _ in range(16)]
         for x, chs in warn.items():
             for ch in chs:
@@ -610,8 +626,20 @@ class MainFrame(wx.Frame):
                 else:
                     logging.getLogger('OSCGUI').info(
                         '%s back to normal' % self.channels_ui[ch].channel_name)
+
+        status = self.device.status()
+        for ch in range(12):
             self.channels_ui[ch].output = bool(status[0] & (1 << ch))
             self.channels_ui[ch].enabled = not bool(status[1] & (1 << ch))
+
+        if overlap and oscgui_config['OSCGUI']['channel_auto_enable'] != 'yes':
+            logging.getLogger('OSCGUI').warning(
+                'Waveform restarted due to '
+                'asynchronous trigger on: %s',
+                ', '.join(
+                    self.channels_ui[x].channel_name for x in overlap))
+
+        for ch in range(12):
             target_color, target_text = self.channels_ui[
                 ch].get_status_color_text()
             if (target_color !=
@@ -690,8 +718,15 @@ class MainFrame(wx.Frame):
                         wx.ALIGN_CENTER)
         channel_box.Add(wx.StaticText(p, -1, 'Mode'), 0,
                         wx.ALIGN_CENTER)
-        channel_box.AddSpacer(0)
-        channel_box.Add(wx.StaticText(p, -1, 'PC Trigger'), 0, wx.ALIGN_CENTER)
+        if oscgui_config['OSCGUI']['channel_auto_enable'] == 'yes':
+            channel_box.Add(wx.StaticText(p, -1, 'PC Trigger'), 0,
+                            wx.ALIGN_CENTER)
+            channel_box.Add(wx.StaticText(p, -1, 'Stop'), 0,
+                            wx.ALIGN_CENTER)
+        else:
+            channel_box.AddSpacer(0)
+            channel_box.Add(wx.StaticText(p, -1, 'PC Trigger'), 0,
+                            wx.ALIGN_CENTER)
         channel_box.Add(wx.StaticText(p, -1, 'Trigger Out'), 0, wx.ALIGN_CENTER)
         channel_box.Add(wx.StaticText(p, -1, 'Status'), 0, wx.ALIGN_CENTER)
         channels_ui = []
@@ -728,15 +763,22 @@ class MainFrame(wx.Frame):
             wrap_box.Add(continuous_toggle, 1, wx.ALIGN_CENTER_VERTICAL)
             channel_box.Add(wrap_box, 0, wx.EXPAND)
 
-            stop_button = wx.Button(p, -1, 'Enable', style=wx.BU_EXACTFIT)
-            wrap_box = wx.BoxSizer(wx.HORIZONTAL)
-            wrap_box.Add(stop_button, 1, wx.ALIGN_CENTER_VERTICAL)
-            channel_box.Add(wrap_box, 0, wx.EXPAND)
+            if oscgui_config['OSCGUI']['channel_auto_enable'] != 'yes':
+                stop_button = wx.Button(p, -1, 'Enable', style=wx.BU_EXACTFIT)
+                wrap_box = wx.BoxSizer(wx.HORIZONTAL)
+                wrap_box.Add(stop_button, 1, wx.ALIGN_CENTER_VERTICAL)
+                channel_box.Add(wrap_box, 0, wx.EXPAND)
 
             trigger_button = wx.Button(p, -1, 'Trigger', style=wx.BU_EXACTFIT)
             wrap_box = wx.BoxSizer(wx.HORIZONTAL)
             wrap_box.Add(trigger_button, 1, wx.ALIGN_CENTER_VERTICAL)
             channel_box.Add(wrap_box, 0, wx.EXPAND)
+
+            if oscgui_config['OSCGUI']['channel_auto_enable'] == 'yes':
+                stop_button = wx.Button(p, -1, 'Stop', style=wx.BU_EXACTFIT)
+                wrap_box = wx.BoxSizer(wx.HORIZONTAL)
+                wrap_box.Add(stop_button, 1, wx.ALIGN_CENTER_VERTICAL)
+                channel_box.Add(wrap_box, 0, wx.EXPAND)
 
             trigger_out_check = wx.CheckBox(p, -1)
             trigger_out_check.Bind(wx.EVT_CHECKBOX, self.on_trigger_out)
@@ -777,20 +819,21 @@ class MainFrame(wx.Frame):
             extra_buttons.Add(update_all)
             self.board_relative_controls.append(update_all)
 
-        enable_all = wx.Button(p, -1, 'Enable All')
-        enable_all.Bind(wx.EVT_BUTTON,
-                        lambda _: self.device.set_enable(range(12), True))
-        extra_buttons.Add(enable_all)
-        disable_all = wx.Button(p, -1, 'Disable All')
-        disable_all.Bind(wx.EVT_BUTTON,
-                         lambda _: self.device.set_enable(range(12), False))
-        extra_buttons.Add(disable_all)
+        if oscgui_config['OSCGUI']['channel_auto_enable'] != 'yes':
+            enable_all = wx.Button(p, -1, 'Enable All')
+            enable_all.Bind(wx.EVT_BUTTON,
+                            lambda _: self.device.set_enable(range(12), True))
+            extra_buttons.Add(enable_all)
+            disable_all = wx.Button(p, -1, 'Disable All')
+            disable_all.Bind(wx.EVT_BUTTON,
+                             lambda _: self.device.set_enable(range(12), False))
+            extra_buttons.Add(disable_all)
+            self.board_relative_controls.extend((enable_all, disable_all))
         trigger_all = wx.Button(p, -1, 'Trigger All')
         trigger_all.Bind(wx.EVT_BUTTON,
                          lambda _: self.device.trigger_channel(range(12)))
         extra_buttons.Add(trigger_all)
-        self.board_relative_controls.extend(
-            (trigger_all, enable_all, disable_all))
+        self.board_relative_controls.append(trigger_all)
         right_box.Add(extra_buttons, 0, wx.EXPAND | wx.BOTTOM, 50)
 
         log_text = wx.TextCtrl(p, -1, style=wx.TE_MULTILINE | wx.TE_READONLY)
@@ -873,15 +916,27 @@ class MainFrame(wx.Frame):
         chs = [ch for ch in range(12) if self.channels_ui[ch].modified]
         if chs:
             if self.device is not None:
-                self.device.set_enable(chs, False)
+                if oscgui_config['OSCGUI']['channel_auto_enable'] == 'yes':
+                    for ch in chs:
+                        self.device.set_channel(ch, osc1lite.ChannelInfo(
+                            osc1lite.SquareWaveform()))
+                    self.device.set_trigger_source(chs, False)
+                    self.device.set_trigger_mode(chs, False)
+                    self.device.trigger_channel(chs)
+                else:
+                    self.device.set_enable(chs, False)
             for ch, x in enumerate(self.channels_ui):
                 if x.modified:
                     x.update_param()
                     wf = x.waveform_choice.GetSelection()
                     data = self.wfm.waveform_panels[wf].channel_info()
-                    data.ext_trig = 0
                     if self.device is not None:
                         self.device.set_channel(ch, data, self.calib[ch])
+                        if oscgui_config['OSCGUI'][
+                            'channel_auto_enable'] == 'yes':
+                            self.device.set_trigger_source(ch, x.trigger)
+                            self.device.set_trigger_mode(ch, x.continuous)
+
             if oscgui_config['Waveform']['realtime_update'] != 'yes':
                 logging.getLogger('OSCGUI').info(
                     'Waveform updated: %s',
@@ -889,11 +944,10 @@ class MainFrame(wx.Frame):
             else:
                 disabled_list = [self.channels_ui[ch].channel_name for ch in chs
                                  if self.channels_ui[ch].enabled]
-                if disabled_list:
+                if disabled_list and oscgui_config['OSCGUI']['channel_auto_enable'] != 'yes':
                     logging.getLogger('OSCGUI').info(
                         'Channel(s) disabled due to waveform change: %s',
                         ', '.join(disabled_list))
-
         elif oscgui_config['Waveform']['realtime_update'] != 'yes':
             logging.getLogger('OSCGUI').info(
                 'Channels already up to date')
@@ -960,6 +1014,8 @@ class MainFrame(wx.Frame):
                 logging.getLogger('OSCGUI').info('Connected')
                 if oscgui_config['Waveform']['realtime_update'] == 'yes':
                     self.on_update(None)
+                if oscgui_config['OSCGUI']['channel_auto_enable'] == 'yes':
+                    self.device.set_enable(range(12), True)
                 self.Thaw()
             else:
                 if self.device is None:
