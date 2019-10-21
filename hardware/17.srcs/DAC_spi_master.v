@@ -53,7 +53,7 @@ assign channel_is_disable = ~output_en;
 assign alarm_out = alarm[4:0];
 assign clear = clear_request; 	// assign OK clr DAC pin control to clr DAC register. 
 assign sclk = ((counter >= 5'd24) | (full_command_one_period == full_command_one_period_prev) )? 0 :clk;
-assign amp_offset = data_from_user + 328;
+assign amp_offset = data_from_user ? data_from_user + 328 : 318;
 
 assign mode = (output_en != output_en_proposed) ? 3'b011  // write control, output enable / disable
 			: (counter2spi == 2) ? 3'b111		// DAC read status register
