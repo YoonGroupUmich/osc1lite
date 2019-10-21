@@ -428,14 +428,14 @@ class WaveFormPanel(wx.StaticBoxSizer):
         return ret
 
     def on_preview(self, event: wx.Event):
-        x_limit = 10
         n_pulses = self.num_of_pulses.GetValue()
-        plt.figure(num='Preview for ' + self.label)
         wf = self.detail.get_waveform()
         if isinstance(wf, osc1lite.SquareWaveform):
             if wf.period <= 0:
-                xs = [0, x_limit]
-                ys = [0, 0]
+                wx.MessageBox(
+                    'Error: invalid period %.3f. Period should be positive.' % wf.period,
+                    'Preview for ' + self.label)
+                return
             else:
                 xs = [0]
                 ys = [0]
@@ -452,6 +452,7 @@ class WaveFormPanel(wx.StaticBoxSizer):
             ys = wf.wave
         else:
             raise TypeError('Waveform type not supported')
+        plt.figure(num='Preview for ' + self.label)
         plt.plot(xs, ys, label=self.label)
         plt.xlabel('time (ms)')
         plt.ylabel('amplitude (\u03bcA)')
@@ -998,7 +999,7 @@ class MainFrame(wx.Frame):
                 except:
                     self.calib = [None for _ in range(12)]
                     logging.getLogger('OSCGUI').warning(
-                        'Calibration data for board %s not found.'
+                        'Calibration data for board %s not found. '
                         'Running in uncalibrated mode.', serial)
                 self.device.reset(self.calib)
                 self.device.init_dac()
