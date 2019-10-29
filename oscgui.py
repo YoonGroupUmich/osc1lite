@@ -962,6 +962,11 @@ class MainFrame(wx.Frame):
                     return
                 serial = self.device_choice.GetStringSelection()
                 self._dev.OpenBySerial(serial)
+                if not self._dev.IsOpen():
+                    logging.getLogger('OSCGUI').fatal(
+                        'Device not open. Maybe you have connected to a new '
+                        'board but have not restarted OSCGUI?')
+                    return
                 self.device = osc1lite.OSC1Lite(self._dev)
                 try:
                     self.device.configure(

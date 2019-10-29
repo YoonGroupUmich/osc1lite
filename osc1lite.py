@@ -60,7 +60,9 @@ class OSC1Lite:
             return sha256.hexdigest()
 
     def __init__(self, dev: ok.okCFrontPanel):
-        assert dev.IsOpen(), 'Device is not opened'
+        if not dev.IsOpen():
+            logging.getLogger('OSC1Lite').fatal('Device is not opened')
+            raise AssertionError('Device is not opened')
         self.dev = dev
         self.device_lock = threading.RLock()
 
