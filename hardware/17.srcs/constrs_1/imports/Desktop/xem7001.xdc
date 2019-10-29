@@ -255,6 +255,8 @@ set_property IOSTANDARD LVCMOS33 [get_ports {trig_in_external[1]}]
 set_property PACKAGE_PIN R1 [get_ports {trig_in_external[0]}]
 set_property IOSTANDARD LVCMOS33 [get_ports {trig_in_external[0]}]
 
+set_property PULLDOWN true [get_ports {trig_in_external}]
+
 ### JP2-25 
 set_property PACKAGE_PIN R2 [get_ports {sdo_bit[2]}]
 set_property IOSTANDARD LVCMOS33 [get_ports {sdo_bit[2]}]
