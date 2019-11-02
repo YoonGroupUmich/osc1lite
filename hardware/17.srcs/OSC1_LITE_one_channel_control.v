@@ -82,7 +82,6 @@ wire [11:0] trig_out_valid;
 wire [11:0] channel_disable;
 wire [11:0] channel_enable;
 wire [15:0] overlap_trig_in;
-wire [15:0] disable_no_trig;
 wire [11:0] trig_source;
 wire [11:0] trig_mode;
 
@@ -102,7 +101,6 @@ wire [11:0] flag;
 wire [11:0] resetflag;
 wire [23:0] counter2spi;
 wire [11:0] new_trig_in;
-wire [11:0] no_trig;
 wire [11:0] config_counter;
 wire [59:0] alarm_out;
 wire [15:0] alarm_out_0; // channel 0-2
@@ -122,7 +120,6 @@ assign alarm_out_9 = {1'b0, alarm_out[59:45]};
 assign flag_out = {4'b0, flag[11:0]};
 assign channel_is_disable_out = {4'b0, channel_is_disable[11:0]};
 assign overlap_trig_in = {4'b0, new_trig_in[11:0]};
-assign disable_no_trig = {4'b0, no_trig[11:0]};
 
 // signals from GUI control
 assign data_mode = data_from_user_mode[3:0];
@@ -206,8 +203,7 @@ trigger_in dotrigger[11:0](
 	.channel_is_disable(channel_is_disable[11:0]),
 	// output
     .flag(flag[11:0]),
-	.new_trig(new_trig_in[11:0]),
-	.no_trig(no_trig[11:0])
+	.new_trig(new_trig_in[11:0])
     );
 
 
@@ -222,7 +218,6 @@ spi_controller dac_spi0 [11:0](
 	.data_from_user(result),	
 	.sdo_bit(sdo_bit),	
 	.counter2spi(counter2spi),
-	.no_trig(no_trig[11:0]),
 	.channel_disable(channel_disable[11:0]),
 	.channel_enable(channel_enable[11:0]),
 	.channel_gain(user_gain),
@@ -292,8 +287,6 @@ okTriggerOut trigOut6e (.ok1(ok1), .ok2(ok2x[ 6*17 +: 17 ]),.ep_addr(8'h6E), .ep
 
 okWireOut wo21 (.ok1(ok1), .ok2(ok2x[ 7*17 +: 17 ]), .ep_addr(8'h21), .ep_datain(flag_out));
 okWireOut wo22 (.ok1(ok1), .ok2(ok2x[ 8*17 +: 17 ]), .ep_addr(8'h22), .ep_datain(channel_is_disable_out));
-
-okTriggerOut trigOut69 (.ok1(ok1), .ok2(ok2x[ 9*17 +: 17 ]),.ep_addr(8'h69), .ep_clk(clk_pulse), .ep_trigger(disable_no_trig));
 
 always @ (posedge clk or posedge rst) begin
 	if(rst) begin

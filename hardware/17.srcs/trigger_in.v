@@ -17,8 +17,7 @@ module trigger_in(
 	input wire channel_is_disable,	// 1 if the channel status is disabled
 	
 	output reg flag,				// 1 to output waveform
-	output reg new_trig,			// 1 if detect overlapped trigger in
-	output reg no_trig				// 1 if the channel is paused (wait for trigger) for 20 seconds
+	output reg new_trig				// 1 if detect overlapped trigger in
     );
 	
 	wire trigger_in;
@@ -28,13 +27,11 @@ module trigger_in(
 	reg prev_trig;
 	reg prev_flag;
 	reg [31:0] counter;
-	wire next_no_trig;
 	
 	assign trigger_in = channel_is_disable ? 1'b0 
 					  : (trig_source == 1'b1) ? trigger_in_external 
 					  : trigger_in_pc;
 	assign next_flag = flag;
-	assign next_no_trig = no_trig;
 
 	always @ (negedge clock) begin
 		if (trigger_in) begin
@@ -71,15 +68,6 @@ module trigger_in(
 			counter <= 0;
 		end else begin
 			counter <= counter + 1;
-		end
-	end
-	
-	always @ (negedge clock) begin
-		if (reset | flag | channel_disable | channel_is_disable) no_trig <= 1'b0;
-		else if (~flag && counter >= 32'h8E56E58) begin // no output for 20s
-			no_trig <= 1'b1;
-		end else begin
-			no_trig <= next_no_trig;
 		end
 	end
 	

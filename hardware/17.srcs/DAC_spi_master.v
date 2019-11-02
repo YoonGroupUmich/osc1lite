@@ -16,7 +16,6 @@ module spi_controller(
 	input  wire [15:0]	data_from_user,		// square waveform_info 
 	input  wire 		sdo_bit,			// data read from DAC
 	input  wire [1:0]	counter2spi,		// counter from read_input module to modulate the read/write cycle
-	input  wire 		no_trig,			// 1 if the channel is paused (wait for trigger) for 20 seconds
 	input  wire 		channel_disable,	// 1 if request to disable the channel
 	input  wire 		channel_enable,		// 1 if request to enable the channel
 	input  wire [15:0]  channel_gain,
@@ -99,8 +98,6 @@ always @ (negedge clk) begin
 		output_en_proposed <= 1'b0;
 	end else if (channel_enable) begin
 		output_en_proposed <= 1'b1;
-	end else if (output_en && no_trig) begin
-		output_en_proposed <= 1'b0;
 	end else begin
 		output_en_proposed <= next_output_en_proposed;
 	end
