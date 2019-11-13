@@ -1022,6 +1022,10 @@ class MainFrame(wx.Frame):
                     self.on_update(None)
                 if oscgui_config['OSCGUI']['channel_auto_enable'] == 'yes':
                     self.device.set_enable(range(12), True)
+                if oscgui_config['OSCGUI']['trigger_out_auto_enable'] == 'yes':
+                    for x in self.channels_ui:
+                        x.trigger_out_check.SetValue(True)
+                    self.device.set_trigger_out(range(12), True)
                 self.Thaw()
             else:
                 if self.device is None:
