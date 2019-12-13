@@ -165,7 +165,8 @@ class ChannelCtrl:
 
     def to_dict(self):
         return {'channel_name': self.channel_name, 'waveform': self.waveform,
-                'trigger': self.trigger, 'continuous': self.continuous}
+                'trigger': self.trigger, 'continuous': self.continuous,
+                'trigger_out': self.trigger_out_check.GetValue()}
 
     def from_dict(self, d: dict):
         assert self.channel_name == d['channel_name'], 'Channel name mismatch'
@@ -182,6 +183,8 @@ class ChannelCtrl:
             self.continuous_toggle.Enable()
         self.trigger_button.Enable(self._enabled and not d['trigger'])
         self.continuous_toggle.SetValue(d['continuous'])
+        self.trigger_out_check.SetValue(d['trigger_out'])
+        self.mf.device.set_trigger_out(self.ch, d['trigger_out'])
         self.set_modified()
 
     def set_modified(self):
