@@ -15,7 +15,7 @@ import wx.lib.scrolledpanel
 import ok
 import osc1lite
 
-__version__ = '2.0.2'
+__version__ = '2.0.3'
 
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "DEBUG"))
 oscgui_config = configparser.ConfigParser()
