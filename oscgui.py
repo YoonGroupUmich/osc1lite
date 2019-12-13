@@ -61,11 +61,12 @@ class ChannelCtrl:
                                   lambda evt: mf.device.set_enable(
                                       ch, stop_button.GetLabel() == 'Enable'))
         self.trigger_out_check = trigger_out_check
+        self.trigger_out_check.Bind(wx.EVT_CHECKBOX, self.on_trigger_out)
         self.status_text = status_text
 
         self.waveform = 'Waveform 1'
         self.trigger = 0
-        self.continuous = 0
+        self.continuous = False
         self._enabled = False
         self.output = False
         self.warnings = []
@@ -79,7 +80,7 @@ class ChannelCtrl:
 
     def on_disconnect(self):
         self.trigger = 0
-        self.continuous = 0
+        self.continuous = False
         self._enabled = False
         self.output = False
         self.warnings = []
@@ -143,14 +144,17 @@ class ChannelCtrl:
         val = event.GetEventObject().GetSelection()
         self.trigger = val
         self.mf.device.set_trigger_source(self.ch, val)
+        self.mf.Freeze()
         if val == 1:
             self.mf.device.set_trigger_mode(self.ch, 0)
+            self.continuous = False
             self.continuous_toggle.Disable()
             self.continuous_toggle.SetLabel('One-shot')
             self.continuous_toggle.SetValue(False)
         else:
             self.continuous_toggle.Enable()
         self.trigger_button.Enable(self._enabled and not val)
+        self.mf.Thaw()
 
     def update_param(self):
         self.waveform = self.waveform_choice.GetStringSelection()
@@ -164,14 +168,20 @@ class ChannelCtrl:
                 'trigger': self.trigger, 'continuous': self.continuous}
 
     def from_dict(self, d: dict):
-        if self.channel_name != d['channel_name']:
-            return
+        assert self.channel_name == d['channel_name'], 'Channel name mismatch'
         self.waveform_choice.SetSelection(
             self.waveform_choice.FindString(d['waveform'], caseSensitive=True))
-        self.trigger_choice.SetSelection(d['trigger'])
-        self.continuous_toggle.SetValue(d['continuous'])
         self.continuous_toggle.SetLabel(
             'Continuous' if d['continuous'] else 'One-shot')
+        self.trigger_choice.SetSelection(d['trigger'])
+        if d['trigger']:
+            self.continuous_toggle.Disable()
+            self.continuous_toggle.SetLabel('One-shot')
+            self.continuous_toggle.SetValue(False)
+        else:
+            self.continuous_toggle.Enable()
+        self.trigger_button.Enable(self._enabled and not d['trigger'])
+        self.continuous_toggle.SetValue(d['continuous'])
         self.set_modified()
 
     def set_modified(self):
@@ -196,6 +206,9 @@ class ChannelCtrl:
         self.mf.device.set_channel(self.ch, data, self.mf.calib[self.ch])
         self.mf.device.set_trigger_source(self.ch, self.trigger)
         self.mf.device.set_trigger_mode(self.ch, self.continuous)
+
+    def on_trigger_out(self, event: wx.Event):
+        self.mf.device.set_trigger_out(self.ch, self.trigger_out_check.GetValue())
 
 
 class SquareWavePanel(wx.FlexGridSizer):
@@ -674,7 +687,7 @@ class MainFrame(wx.Frame):
         self.device_choice = wx.Choice(p, -1,
                                        choices=['[No connected device]'])
         self.device_choice.SetSelection(0)
-        self.device_choice.SetSize(self.device_choice.GetBestSize())
+        self.device_choice.SetSize(self.device_choice.GetSizeFromTextSize(self.device_choice.GetTextExtent('[No connected device]')))
         self.connect_button = wx.Button(p, -1, 'Connect')
         self.connect_button.Disable()
         self.connect_button.Bind(
@@ -782,7 +795,6 @@ class MainFrame(wx.Frame):
                 channel_box.Add(wrap_box, 0, wx.EXPAND)
 
             trigger_out_check = wx.CheckBox(p, -1)
-            trigger_out_check.Bind(wx.EVT_CHECKBOX, self.on_trigger_out)
             channel_box.Add(trigger_out_check, 0, wx.ALIGN_CENTER)
 
             status_text = wx.TextCtrl(p, -1, 'Board not connected',
@@ -902,16 +914,6 @@ class MainFrame(wx.Frame):
                 logging.getLogger().removeHandler(self.log_fh)
                 self.log_fh.close()
                 self.log_fh = None
-
-    def on_trigger_out(self, event: wx.Event):
-        ident = event.GetId()
-        obj = event.GetEventObject()
-        assert isinstance(obj, wx.CheckBox)
-        for ch, x in enumerate(self.channels_ui):
-            if ident == x.trigger_out_check.GetId():
-                assert isinstance(self.device, osc1lite.OSC1Lite)
-                self.device.set_trigger_out(ch, x.trigger_out_check.GetValue())
-                break
 
     def on_update(self, event: wx.Event):
         chs = [ch for ch in range(12) if self.channels_ui[ch].modified]
@@ -1109,19 +1111,21 @@ class MainFrame(wx.Frame):
             if fd.ShowModal() == wx.ID_CANCEL:
                 return
             pathname = fd.GetPath()
+            self.Freeze()
             try:
                 with open(pathname, 'r') as fp:
                     config = json.load(fp)
                 if config['__version__'] != __version__:
-                    raise ValueError('Config file has incompatible version')
+                    raise ValueError('Config file has incompatible version (config version: '+config['__version__']+', software version: '+__version__+')')
                 self.wfm.from_dict(config['waveforms'])
                 for x, y in zip(self.channels_ui, config['channels']):
                     x.from_dict(y)
             except (IOError, ValueError, KeyError) as e:
                 logging.getLogger('OSCGUI').error(
-                    'Failed to load config file: ' + repr(e))
+                    'Failed to load config file: ' + str(e))
             if oscgui_config['Waveform']['realtime_update'] == 'yes':
                 self.on_update(None)
+            self.Thaw()
 
 
 if __name__ == '__main__':
