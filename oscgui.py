@@ -590,6 +590,7 @@ class MainFrame(wx.Frame):
 
     def device_lister(self) -> None:
         devices = {}
+        self._dev = ok.okCFrontPanel()
         for i in range(self._dev.GetDeviceCount()):
             model = self._dev.GetDeviceListModel(i)
             serial = self._dev.GetDeviceListSerial(i)
@@ -676,7 +677,6 @@ class MainFrame(wx.Frame):
         wx.Frame.__init__(
             self, parent, ident,
             'OSC1Lite Stimulate GUI v' + __version__)
-        self._dev = ok.okCFrontPanel()
         self.device = None
         self.devices = {}
 
