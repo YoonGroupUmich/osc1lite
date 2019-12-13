@@ -16,12 +16,19 @@ class SquareWaveform(Waveform):
     def __init__(self, mode=0, amp=0., pw=0., period=0.):
         """
         mode controls the rising/falling edge width
+        mode       rising edge width (ms)
+          0                 0
+          1                 0.1
+          2                 0.5
+          3                 1
+          4                 2
+
         amp controls the wave amplitude
         """
-        self.mode = mode
-        self.amp = amp  # uA, range: [0, 24000]. Use amp=0 to stop the channel
-        self.period = period  # sec, range: [0, 10.23]
-        self.pulse_width = pw  # sec
+        self.mode = mode  # mode controls the rising/falling edge
+        self.amp = amp  # uA, range: [0, 155.9]. Use amp=0 to stop the channel
+        self.period = period  # sec, range: [0, 17.98]
+        self.pulse_width = pw  # sec, range: [0, period]
 
 
 class CustomWaveform(Waveform):
