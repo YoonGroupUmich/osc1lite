@@ -14,6 +14,5 @@ Download the following files:
 from the latest release:
 https://github.com/YoonGroupUmich/osc1lite/releases/
 ## Mac and Linux
-The OSC1Lite GUI **IS** compatible with Mac and Linux, but has not been tested on these OSes, and thus is not currently supported. 
-
-
+The OSC1Lite GUI should be compatible with Mac and Linux, but has not been tested on these OSes, and thus is not currently supported. We do not provide binary builds for these OSes.
+The GUI can be started by running `./oscgui.py`. Dependencies need to be installed first, including OpalKelly SDK and corresponding version of Python, matplotlib, and wxPython.
