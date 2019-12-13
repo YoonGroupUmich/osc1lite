@@ -853,17 +853,20 @@ class MainFrame(wx.Frame):
         right_box.Add(extra_buttons, 0, wx.EXPAND | wx.BOTTOM, 50)
 
         log_text = wx.TextCtrl(p, -1, style=wx.TE_MULTILINE | wx.TE_READONLY)
-        sh = logging.StreamHandler(log_text)
-        sh.setLevel(logging.INFO)
+        self.log_sh = logging.StreamHandler(log_text)
+        self.log_sh.setLevel(logging.DEBUG if oscgui_config['OSCGUI']['verbose_log'] == 'yes' else logging.INFO)
         self.formatter = logging.Formatter(
             '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-        sh.setFormatter(self.formatter)
-        logging.getLogger().addHandler(sh)
+        self.log_sh.setFormatter(self.formatter)
+        logging.getLogger().addHandler(self.log_sh)
         log_box = wx.StaticBoxSizer(wx.VERTICAL, p, 'Log')
         log_box.Add(log_text, 1, wx.EXPAND)
 
         log_options_sizer = wx.BoxSizer(wx.HORIZONTAL)
         log_options_sizer.AddStretchSpacer(1)
+
+        verbose_log_checkbox = wx.CheckBox(p, -1, 'Enable verbose logging')
+        verbose_log_checkbox.Bind(wx.EVT_CHECKBOX, self.on_verbose_log)
         save_log_checkbox = wx.CheckBox(p, -1, 'Save log to file')
         save_log_checkbox.Bind(wx.EVT_CHECKBOX, self.on_save_log)
 
@@ -871,13 +874,16 @@ class MainFrame(wx.Frame):
             save_log_checkbox.SetValue(True)
             self.log_fh = logging.FileHandler(
                 time.strftime('oscgui-%Y%m%d.log'), delay=True)
-            self.log_fh.setLevel(logging.INFO)
+            self.log_fh.setLevel(logging.DEBUG if oscgui_config['OSCGUI']['verbose_log'] == 'yes' else logging.INFO)
             self.log_fh.setFormatter(self.formatter)
             logging.getLogger().addHandler(self.log_fh)
         else:
             self.log_fh = None
+        verbose_log_checkbox.SetValue(oscgui_config['OSCGUI']['verbose_log'] == 'yes')
+
         clear_log_button = wx.Button(p, -1, 'Clear Log')
         clear_log_button.Bind(wx.EVT_BUTTON, lambda _: log_text.Clear())
+        log_options_sizer.Add(verbose_log_checkbox, wx.SizerFlags().Expand())
         log_options_sizer.Add(save_log_checkbox, wx.SizerFlags().Expand())
         log_options_sizer.Add(clear_log_button, wx.SizerFlags().Expand())
         log_box.Add(log_options_sizer, wx.SizerFlags().Expand())
@@ -917,6 +923,25 @@ class MainFrame(wx.Frame):
                 logging.getLogger().removeHandler(self.log_fh)
                 self.log_fh.close()
                 self.log_fh = None
+
+    def on_verbose_log(self, event: wx.Event):
+        obj = event.GetEventObject()
+        assert isinstance(obj, wx.CheckBox)
+        if obj.GetValue():
+            oscgui_config['OSCGUI']['verbose_log'] = 'yes'
+            with open('config.ini', 'w') as fp:
+                oscgui_config.write(fp)
+            self.log_sh.setLevel(logging.DEBUG)
+            if self.log_fh is not None:
+                self.log_fh.setLevel(logging.DEBUG)
+
+        else:
+            oscgui_config['OSCGUI']['verbose_log'] = 'no'
+            with open('config.ini', 'w') as fp:
+                oscgui_config.write(fp)
+            self.log_sh.setLevel(logging.INFO)
+            if self.log_fh is not None:
+                self.log_fh.setLevel(logging.INFO)
 
     def on_update(self, event: wx.Event):
         chs = [ch for ch in range(12) if self.channels_ui[ch].modified]
@@ -1123,7 +1148,7 @@ class MainFrame(wx.Frame):
                 self.wfm.from_dict(config['waveforms'])
                 for x, y in zip(self.channels_ui, config['channels']):
                     x.from_dict(y)
-            except (IOError, ValueError, KeyError) as e:
+            except (IOError, ValueError, KeyError, AssertionError) as e:
                 logging.getLogger('OSCGUI').error(
                     'Failed to load config file: ' + str(e))
             if oscgui_config['Waveform']['realtime_update'] == 'yes':

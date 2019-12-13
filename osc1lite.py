@@ -175,10 +175,8 @@ class OSC1Lite:
 
     def set_channel(self, channel, data: ChannelInfo, calib=None):
         logging.getLogger('OSC1Lite').debug(
-            'Sending params for channel %d', channel)
-        logging.getLogger('OSC1Lite').debug(
-            'amp=%f, pw=%f, period=%f',
-            data.wf.amp, data.wf.pulse_width, data.wf.period)
+            'Sending params for channel %d: mode=%d, amp=%.1f, pw=%f, period=%f', channel,
+            data.wf.mode, data.wf.amp, data.wf.pulse_width, data.wf.period)
         word = round(data.wf.pulse_width / (2 ** 7) * self._freq)
         word_pw = 0 if word < 0 else 0xffff if word > 0xfffff else word
         word = round(data.wf.period / (2 ** 7) * self._freq)
