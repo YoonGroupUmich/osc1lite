@@ -6,7 +6,6 @@ This is a sample script that programmatically controls OSC1Lite using the API
 
 import ok        # The OpalKelly SDK, you may need to manually copy it to current folder
 import osc1lite  # The OSC1Lite python interface
-import time
 
 import os
 
@@ -66,6 +65,9 @@ def main():
 
     # Set all channels to continuous mode
     osc.set_trigger_mode(range(12), True)
+
+    # Set all channels to PC trigger
+    osc.set_trigger_source(range(12), False)
 
     # Configure the waveform parameters of each channel
     for ch in range(12):
