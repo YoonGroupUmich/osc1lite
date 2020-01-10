@@ -206,7 +206,7 @@ class ChannelCtrl:
 
         wf = self.waveform_choice.GetSelection()
         data = self.mf.wfm.waveform_panels[wf].channel_info()
-        self.mf.device.set_channel(self.ch, data, self.mf.calib[self.ch])
+        self.mf.device.set_channel(self.ch, data)
         self.mf.device.set_trigger_source(self.ch, self.trigger)
         self.mf.device.set_trigger_mode(self.ch, self.continuous)
 
@@ -681,7 +681,6 @@ class MainFrame(wx.Frame):
         self.devices = {}
 
         self.board_relative_controls = []
-        self.calib = [None for _ in range(12)]
 
         p = wx.Panel(self, -1)
 
@@ -962,7 +961,7 @@ class MainFrame(wx.Frame):
                     wf = x.waveform_choice.GetSelection()
                     data = self.wfm.waveform_panels[wf].channel_info()
                     if self.device is not None:
-                        self.device.set_channel(ch, data, self.calib[ch])
+                        self.device.set_channel(ch, data)
                         if oscgui_config['OSCGUI'][
                             'channel_auto_enable'] == 'yes':
                             self.device.set_trigger_source(ch, x.trigger)
@@ -997,7 +996,27 @@ class MainFrame(wx.Frame):
                         'Device not open. Maybe you have connected to a new '
                         'board but have not restarted OSCGUI?')
                     return
-                self.device = osc1lite.OSC1Lite(self._dev)
+                try:
+                    with open('calib/' + serial + '.calib') as fp:
+                        calib = []
+                        for _ in range(12):
+                            s = next(fp).strip().split(None, 2)
+                            s[0] = float(s[0])
+                            s[1] = float(s[1])
+                            if len(s) == 3:
+                                s[2] = float(s[2])
+                                s[0] /= s[2]
+                                s[1] /= s[2]
+                            else:
+                                s[0] /= 100
+                                s[1] /= 100
+                            calib.append(s[0:2])
+                except:
+                    calib = [None for _ in range(12)]
+                    logging.getLogger('OSCGUI').warning(
+                        'Calibration data for board %s not found. '
+                        'Running in uncalibrated mode.', serial)
+                self.device = osc1lite.OSC1Lite(self._dev, calib=calib)
                 try:
                     self.device.configure(
                         bit_file='OSC1_LITE_Control.bit',
@@ -1016,27 +1035,7 @@ class MainFrame(wx.Frame):
                     self.device = None
                     self._dev.Close()
                     return
-                try:
-                    with open('calib/' + serial + '.calib') as fp:
-                        self.calib = []
-                        for _ in range(12):
-                            s = next(fp).strip().split(None, 2)
-                            s[0] = float(s[0])
-                            s[1] = float(s[1])
-                            if len(s) == 3:
-                                s[2] = float(s[2])
-                                s[0] /= s[2]
-                                s[1] /= s[2]
-                            else:
-                                s[0] /= 100
-                                s[1] /= 100
-                            self.calib.append(s[0:2])
-                except:
-                    self.calib = [None for _ in range(12)]
-                    logging.getLogger('OSCGUI').warning(
-                        'Calibration data for board %s not found. '
-                        'Running in uncalibrated mode.', serial)
-                self.device.reset(self.calib)
+                self.device.reset()
                 self.device.init_dac()
                 self.device.enable_dac_output()
                 self.Freeze()

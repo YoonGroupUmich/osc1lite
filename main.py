@@ -29,11 +29,12 @@ def main():
     assert n_devices, 'No connected device. Check the connection and make sure no other program is occupying the device.'
 
     # Open the default device
-    dev.OpenBySerial("")
+    #serial = '1740000JJK'
+    serial = ''
+    dev.OpenBySerial(serial)
     assert dev.IsOpen(), 'Device open failed. Is the FPGA dead?'
 
     # Load the calibration data (you need to fill in the serial of your board)
-    #serial = '1740000JJK'
     try:
         with open('calib/' + serial + '.calib') as fp:
             calib = []
@@ -54,9 +55,9 @@ def main():
         calib = [None for _ in range(12)]
 
     # Initialize OSC1Lite board
-    osc = osc1lite.OSC1Lite(dev)
+    osc = osc1lite.OSC1Lite(dev, calib=calib)
     osc.configure(bit_file='OSC1_LITE_Control.bit', ignore_hash_error=False)
-    osc.reset(calib=calib)
+    osc.reset()
     osc.init_dac()
     osc.enable_dac_output()
 
@@ -69,7 +70,7 @@ def main():
     # Configure the waveform parameters of each channel
     for ch in range(12):
         osc.set_channel(ch, osc1lite.ChannelInfo(
-            osc1lite.SquareWaveform(0, 50, .1, .2)), calib=calib[ch])
+            osc1lite.SquareWaveform(0, 50, .1, .2)))
 
     # Send PC trigger to all channels
     osc.trigger_channel(range(12))

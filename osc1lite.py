@@ -15,7 +15,7 @@ class SquareWaveform(Waveform):
 
     def __init__(self, mode=0, amp=0., pw=0., period=0.):
         """
-        mode controls the rising/falling edge width
+        mode: controls the rising/falling edge width
         mode       rising edge width (ms)
           0                 0
           1                 0.1
@@ -23,12 +23,16 @@ class SquareWaveform(Waveform):
           3                 1
           4                 2
 
-        amp controls the wave amplitude
+        amp: controls the wave amplitude, unit: uA, range: [0, 155.9].
+        amp=0 can be used to stop the channel
+
+        period: controls the wave period, unit: second, range: [0, 17.98].
+        pw: controls the wave pulse width, unit: second, range: [0, period]
         """
-        self.mode = mode  # mode controls the rising/falling edge
-        self.amp = amp  # uA, range: [0, 155.9]. Use amp=0 to stop the channel
-        self.period = period  # sec, range: [0, 17.98]
-        self.pulse_width = pw  # sec, range: [0, period]
+        self.mode = mode
+        self.amp = amp
+        self.period = period
+        self.pulse_width = pw
 
 
 class CustomWaveform(Waveform):
@@ -40,15 +44,13 @@ class CustomWaveform(Waveform):
 
 
 class ChannelInfo:
-    def __init__(self, waveform: SquareWaveform, n_pulses=1,
-                 ext_trig=0):
+    def __init__(self, waveform: SquareWaveform, n_pulses=1):
         """
-        mode controls the rising/falling edge width
-        amp controls the wave amplitude
+        waveform: the waveform object. Currently we only support SquareWaveform
+        n_pulses: positive integer. Number of pulses
         """
         self.wf = waveform
-        self.n_pulses = n_pulses  # set n_pulses to 0 for continuous output
-        self.ext_trig = ext_trig  # deprecated
+        self.n_pulses = n_pulses
 
 
 class OSC1Lite:
@@ -66,12 +68,16 @@ class OSC1Lite:
                 sha256.update(data)
             return sha256.hexdigest()
 
-    def __init__(self, dev: ok.okCFrontPanel):
+    def __init__(self, dev: ok.okCFrontPanel, calib):
         if not dev.IsOpen():
             logging.getLogger('OSC1Lite').fatal('Device is not opened')
             raise AssertionError('Device is not opened')
         self.dev = dev
         self.device_lock = threading.RLock()
+        if calib is None:
+            self.calib = [None for _ in range(12)]
+        else:
+            self.calib = calib
 
     def configure(self, bit_file='OSC1_LITE_Control.bit',
                   ignore_hash_error=False):
@@ -173,9 +179,10 @@ class OSC1Lite:
             self._write_to_wire_in(0x00, 1)
             self._write_to_wire_in(0x00, 0)
 
-    def set_channel(self, channel, data: ChannelInfo, calib=None):
+    def set_channel(self, channel, data: ChannelInfo):
         logging.getLogger('OSC1Lite').debug(
-            'Sending params for channel %d: mode=%d, amp=%.1f, pw=%f, period=%f', channel,
+            'Sending params for channel %d: mode=%d, amp=%.1f, pw=%f, '
+            'period=%f', channel,
             data.wf.mode, data.wf.amp, data.wf.pulse_width, data.wf.period)
         word = round(data.wf.pulse_width / (2 ** 7) * self._freq)
         word_pw = 0 if word < 0 else 0xffff if word > 0xfffff else word
@@ -191,11 +198,11 @@ class OSC1Lite:
             self._write_to_wire_in(
                 0x0a, (word_pw >> 16) | ((word_period >> 8) & 0x0f00),
                 update=False)
-            if calib is None:
+            if self.calib[channel] is None:
                 gain = 0x8000
                 zero = 0x0000
             else:
-                t10, t90 = calib
+                t10, t90 = self.calib[channel]
                 # c10 = 33, c90 = 295
                 t90 = t90 / 20 * 65536
                 t10 = t10 / 20 * 65536
@@ -205,14 +212,13 @@ class OSC1Lite:
                 zero = - b / k
             self._write_to_wire_in(0x0c, round(gain) & 0xffff, update=False)
             self._write_to_wire_in(0x0d, round(zero) & 0xffff, update=False)
-            self._write_to_wire_in(
-                0x06, data.wf.mode | (channel << 4) | (data.ext_trig << 9),
-                update=True)
+            self._write_to_wire_in(0x06, data.wf.mode | (channel << 4),
+                                   update=True)
 
             # Send data update trigger
             self._write_to_wire_in(0x06, 0x0100, mask=0x0100, update=True)
 
-    def reset(self, calib):
+    def reset(self):
         with self.device_lock:
             for channel in range(0x20):
                 self._write_to_wire_in(channel, 0, update=False)
@@ -221,7 +227,8 @@ class OSC1Lite:
             self.reset_dac()
             self.reset_pipe()
             for i in range(12):
-                self.set_channel(i, ChannelInfo(SquareWaveform()), calib[i])
+                self.set_channel(i, ChannelInfo(SquareWaveform()),
+                                 self.calib[i])
         logging.getLogger('OSC1Lite').info('Reset done')
 
     def init_dac(self):
