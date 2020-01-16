@@ -226,8 +226,7 @@ class OSC1Lite:
             self.reset_dac()
             self.reset_pipe()
             for i in range(12):
-                self.set_channel(i, ChannelInfo(SquareWaveform()),
-                                 self.calib[i])
+                self.set_channel(i, ChannelInfo(SquareWaveform()))
         logging.getLogger('OSC1Lite').info('Reset done')
 
     def init_dac(self):
