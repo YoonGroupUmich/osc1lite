@@ -3,6 +3,7 @@
 import ok
 import hashlib
 import logging
+import struct
 import threading
 
 
@@ -40,6 +41,7 @@ class CustomWaveform(Waveform):
             self.wave = []
         else:
             self.wave = wave
+        self.interval = 1
 
 
 class ChannelInfo:
@@ -326,3 +328,11 @@ class OSC1Lite:
             # 0x22:  1: Channel Enabled, 0: Channel Disabled
             return (self.dev.GetWireOutValue(0x21),
                     self.dev.GetWireOutValue(0x22))
+
+    def send_custom_waveform(self, index: int, data: CustomWaveform):
+        buff = b'csw\n'
+        buff += struct.pack('<BBH', index, data.interval, len(data.wave))
+        for x in data.wave:
+            buff += struct.pack('<H', x)
+        with self.device_lock:
+            self.dev.WriteToPipeIn(0x80, buff)
