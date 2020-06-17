@@ -198,7 +198,7 @@ class ChannelCtrl:
 
     def on_stop(self, event: wx.Event):
         self.mf.device.set_channel(self.ch, osc1lite.ChannelInfo(
-                osc1lite.SquareWaveform()))
+            osc1lite.SquareWaveform()))
         self.mf.device.set_trigger_source(self.ch, False)
         self.mf.device.set_trigger_mode(self.ch, False)
         self.stopped = True
@@ -356,32 +356,79 @@ class SquareWavePanel(wx.FlexGridSizer):
         event.Skip()
 
 
-class CustomWavePanel(wx.BoxSizer):
-    def __init__(self, parent, init_dict=None):
-        wx.BoxSizer.__init__(self, wx.VERTICAL)
+class CustomWavePanel(wx.FlexGridSizer):
+    "CustomWavePanel manages GUI logic related to custom wave and sine wave. It handles open and read custom waveform from cwave file."
+
+    def __init__(self, parent, modify_callback, mf, init_dict=None):
+        wx.FlexGridSizer.__init__(self, 2, 2, 5, 5)
+        self.AddGrowableCol(0, 4)
+        self.AddGrowableCol(1, 1)
         self.Add(wx.StaticText(parent, -1, 'Custom Waveform File'), 0,
                  wx.EXPAND)
+        self.Add(wx.StaticText(parent, -1, 'Sample Interval'), 0, wx.EXPAND)
+
+        self.wave = []
+        self.index = 0
+        self.mf = mf
+        try:
+            self.clk_div = init_dict['clk_div']
+        except (TypeError, KeyError, ValueError):
+            self.clk_div = 1
+
         self.file_picker = wx.FilePickerCtrl(parent, -1, wildcard='*.cwave')
         self.file_picker.Bind(wx.EVT_FILEPICKER_CHANGED, self.on_file)
         self.Add(self.file_picker, 0, wx.EXPAND)
-        self.wave = []
+        self.sample_rate_text = wx.Choice(parent, -1, choices=[
+            '17.152 \u03bcs (58.3 kHz)', '34.304 \u03bcs (29.2 kHz)', '51.456 \u03bcs (19.4 kHz)',
+            '68.608 \u03bcs (14.6 kHz)', '85.760 \u03bcs (11.7 kHz)', '102.912 \u03bcs (9.7 kHz)',
+            '120.064 \u03bcs (8.3 kHz)', '137.216 \u03bcs (7.3 kHz)', '154.368 \u03bcs (6.5 kHz)',
+            '171.520 \u03bcs (5.8 kHz)', '188.672 \u03bcs (5.3 kHz)', '205.824 \u03bcs (4.9 kHz)',
+            '222.976 \u03bcs (4.5 kHz)', '240.128 \u03bcs (4.2 kHz)', '257.280 \u03bcs (3.9 kHz)'])
+        self.sample_rate_text.SetSelection(self.clk_div - 1)
+        self.sample_rate_text.Bind(wx.EVT_CHOICE, self.on_sample_rate)
+        self.Add(self.sample_rate_text, 0, wx.EXPAND)
+
+        self.modify_callback = modify_callback
 
     def on_file(self, event: wx.Event):
         with open(self.file_picker.GetPath()) as fp:
             self.wave = [float(x) for x in fp.read().split()]
+        self.modify_callback()
+        self.send_custom_waveform()
+
+    def on_sample_rate(self, event: wx.CommandEvent):
+        self.clk_div = event.GetInt() + 1
+        self.modify_callback()
+        self.send_custom_waveform()
+        event.Skip()
 
     def get_waveform(self) -> osc1lite.CustomWaveform:
-        return osc1lite.CustomWaveform(self.wave)
+        return osc1lite.CustomWaveform(self.wave, self.clk_div, self.index)
+
+    def to_dict(self):
+        return {'clk_div': self.clk_div}
+
+    def send_custom_waveform(self):
+        wf = self.get_waveform()
+        if wf.wave and self.mf.device:
+            self.mf.device.send_custom_waveform(wf)
+
+    def set_index(self, index: int):
+        self.index = index
+        if index > 0:
+            self.send_custom_waveform()
+
 
 
 class WaveFormPanel(wx.StaticBoxSizer):
-    def __init__(self, parent, label, modify_callback, init_dict=None):
+    def __init__(self, parent: wx.ScrolledWindow, label, modify_callback, init_dict=None):
         wx.StaticBoxSizer.__init__(self, wx.VERTICAL, parent, label)
+        self.parent = parent
         p = self.GetStaticBox()
         font = wx.Font(wx.FontInfo(10).Bold())
         self.label = label
         common = wx.BoxSizer(wx.HORIZONTAL)
-        wf_types = ['Square / Trapezoid']
+        wf_types = ['Square / Trapezoid', 'Custom']
         self.waveform_type_choice = wx.Choice(p, -1, choices=wf_types)
         try:
             sel = wf_types.index(init_dict['type'])
@@ -418,7 +465,8 @@ class WaveFormPanel(wx.StaticBoxSizer):
         self.Add(common, 0, wx.EXPAND)
         self.p_square = SquareWavePanel(p, lambda: modify_callback(self.label),
                                         init_dict=init_dict)
-        self.p_custom = CustomWavePanel(p, init_dict=init_dict)
+        self.p_custom = CustomWavePanel(p, lambda: modify_callback(self.label), self.parent.mf,
+                                        init_dict=init_dict)
         self.Add(self.p_square, 0, wx.EXPAND | wx.ALL, 3)
         self.Add(self.p_custom, 0, wx.EXPAND | wx.ALL, 3)
         self.Hide(self.p_custom)
@@ -479,18 +527,32 @@ class WaveFormPanel(wx.StaticBoxSizer):
         assert isinstance(obj, wx.Choice)
         if obj.GetSelection() == 0:  # Square Wave
             self.Hide(self.p_custom)
+            self.p_custom.index = 0
             self.Show(self.p_square)
             self.Layout()
             self.detail = self.p_square
         else:
+            custom_index = self.parent.get_available_custom_index()
+            if custom_index == 0:
+                wx.MessageBox(
+                        'Cannot add more custom waveform.\n'
+                        'Maximum number of different custom waveforms has reached.',
+                        'Error', wx.ICON_ERROR | wx.OK | wx.CENTRE, self.parent.mf)
+                obj.SetSelection(0)  # Set selection back to Square wave
+                return
             self.Hide(self.p_square)
+            self.p_custom.index = custom_index
             self.Show(self.p_custom)
             self.Layout()
             self.detail = self.p_custom
+        self.parent.Layout()
+        self.modify_callback(self.label)
 
 
 class WaveformManager(wx.ScrolledWindow):
     def __init__(self, parent, mf, ident=-1):
+        self.parent = parent
+        self.mf = mf
         wx.ScrolledWindow.__init__(self, parent, ident,
                                    style=wx.VSCROLL | wx.ALWAYS_SHOW_SB)
         self.box = wx.BoxSizer(wx.VERTICAL)
@@ -512,8 +574,6 @@ class WaveformManager(wx.ScrolledWindow):
         self.SetScrollRate(5, 5)
 
         self.Bind(wx.EVT_BUTTON, self.on_delete)
-        self.parent = parent
-        self.mf = mf
 
     def on_delete(self, event: wx.Event):
         ident = event.GetId()
@@ -573,6 +633,15 @@ class WaveformManager(wx.ScrolledWindow):
         self.mf.update_wf_list()
         self.parent.Layout()
         self.parent.Thaw()
+
+    def get_available_custom_index(self):
+        custom_index = set()
+        for x in self.waveform_panels:
+            custom_index.add(x.p_custom.index)
+        for i in range(1, 16):
+            if i not in custom_index:
+                return i
+        return 0
 
 
 class MainFrame(wx.Frame):
@@ -689,7 +758,8 @@ class MainFrame(wx.Frame):
         self.device_choice = wx.Choice(p, -1,
                                        choices=['[No connected device]'])
         self.device_choice.SetSelection(0)
-        self.device_choice.SetSize(self.device_choice.GetSizeFromTextSize(self.device_choice.GetTextExtent('[No connected device]')))
+        self.device_choice.SetSize(
+            self.device_choice.GetSizeFromTextSize(self.device_choice.GetTextExtent('[No connected device]')))
         self.connect_button = wx.Button(p, -1, 'Connect')
         self.connect_button.Disable()
         self.connect_button.Bind(
@@ -1143,7 +1213,8 @@ class MainFrame(wx.Frame):
                 with open(pathname, 'r') as fp:
                     config = json.load(fp)
                 if config['__version__'] != __version__:
-                    raise ValueError('Config file has incompatible version (config version: '+config['__version__']+', software version: '+__version__+')')
+                    raise ValueError('Config file has incompatible version (config version: ' + config[
+                        '__version__'] + ', software version: ' + __version__ + ')')
                 self.wfm.from_dict(config['waveforms'])
                 for x, y in zip(self.channels_ui, config['channels']):
                     x.from_dict(y)

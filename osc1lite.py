@@ -36,12 +36,13 @@ class SquareWaveform(Waveform):
 
 
 class CustomWaveform(Waveform):
-    def __init__(self, wave=None):
+    def __init__(self, wave=None, clk_div=1, index=-1):
         if wave is None:
             self.wave = []
         else:
             self.wave = wave
-        self.interval = 1
+        self.clk_div = clk_div
+        self.index = index  # The index used on board to identify this custom waveform
 
 
 class ChannelInfo:
@@ -181,43 +182,73 @@ class OSC1Lite:
             self._write_to_wire_in(0x00, 0)
 
     def set_channel(self, channel, data: ChannelInfo):
-        logging.getLogger('OSC1Lite').debug(
-            'Sending params for channel %d: mode=%d, amp=%.1f, pw=%f, '
-            'period=%f', channel,
-            data.wf.mode, data.wf.amp, data.wf.pulse_width, data.wf.period)
-        word = round(data.wf.pulse_width / (2 ** 7) * self._freq)
-        word_pw = 0 if word < 0 else 0xffff if word > 0xfffff else word
-        word = round(data.wf.period / (2 ** 7) * self._freq)
-        word_period = 0 if word < 0 else 0xffff if word > 0xfffff else word
-        word = round(data.wf.amp / 20000 * 65536)
-        word_amp = 0 if word < 0 else 0xffff if word > 0xffff else word
-        with self.device_lock:
-            self._write_to_wire_in(0x03, word_pw & 0xffff, update=False)
-            self._write_to_wire_in(0x04, word_period & 0xffff, update=False)
-            self._write_to_wire_in(0x05, word_amp, update=False)
-            self._write_to_wire_in(0x07, data.n_pulses, update=False)
-            self._write_to_wire_in(
-                0x0a, (word_pw >> 16) | ((word_period >> 8) & 0x0f00),
-                update=False)
-            if self.calib[channel] is None:
-                gain = 0x8000
-                zero = 0x0000
-            else:
-                t10, t90 = self.calib[channel]
-                # c10 = 33, c90 = 295
-                t90 = t90 / 20 * 65536
-                t10 = t10 / 20 * 65536
-                k = (t90 - t10) / 262
-                b = ((t90 + t10 + 655.36) - 328 * 3 * k) / 2
-                gain = 1 / k * (2 ** 16) - (2 ** 15)
-                zero = - b / k
-            self._write_to_wire_in(0x0c, round(gain) & 0xffff, update=False)
-            self._write_to_wire_in(0x0d, round(zero) & 0xffff, update=False)
-            self._write_to_wire_in(0x06, data.wf.mode | (channel << 4),
-                                   update=True)
+        if isinstance(data.wf, SquareWaveform):
+            logging.getLogger('OSC1Lite').debug(
+                'Sending params for channel %d: mode=%d, amp=%.1f, pw=%f, '
+                'period=%f', channel,
+                data.wf.mode, data.wf.amp, data.wf.pulse_width, data.wf.period)
+            word = round(data.wf.pulse_width / (2 ** 7) * self._freq)
+            word_pw = 0 if word < 0 else 0xffff if word > 0xfffff else word
+            word = round(data.wf.period / (2 ** 7) * self._freq)
+            word_period = 0 if word < 0 else 0xffff if word > 0xfffff else word
+            word = round(data.wf.amp / 20000 * 65536)
+            word_amp = 0 if word < 0 else 0xffff if word > 0xffff else word
+            with self.device_lock:
+                self._write_to_wire_in(0x03, word_pw & 0xffff, update=False)
+                self._write_to_wire_in(0x04, word_period & 0xffff, update=False)
+                self._write_to_wire_in(0x05, word_amp, update=False)
+                self._write_to_wire_in(0x07, data.n_pulses, update=False)
+                self._write_to_wire_in(
+                    0x0a, (word_pw >> 16) | ((word_period >> 8) & 0x0f00),
+                    update=False)
+                if self.calib[channel] is None:
+                    gain = 0x8000
+                    zero = 0x0000
+                else:
+                    t10, t90 = self.calib[channel]
+                    # c10 = 33, c90 = 295
+                    t90 = t90 / 20 * 65536
+                    t10 = t10 / 20 * 65536
+                    k = (t90 - t10) / 262
+                    b = ((t90 + t10 + 655.36) - 328 * 3 * k) / 2
+                    gain = 1 / k * (2 ** 16) - (2 ** 15)
+                    zero = - b / k
+                self._write_to_wire_in(0x0c, round(gain) & 0xffff, update=False)
+                self._write_to_wire_in(0x0d, round(zero) & 0xffff, update=False)
+                self._write_to_wire_in(0x06, data.wf.mode | (channel << 4),
+                                       update=True)
 
-            # Send data update trigger
-            self._write_to_wire_in(0x06, 0x0100, mask=0x0100, update=True)
+                # Send data update trigger
+                self._write_to_wire_in(0x06, 0x0100, mask=0x0100, update=True)
+        else:  # CustomWaveform
+            assert(data.wf.index > 0)
+            logging.getLogger('OSC1Lite').debug(
+                'Sending params for channel %d: custom_waveform #%d', channel,
+                data.wf.index)
+            with self.device_lock:
+                self._write_to_wire_in(0x03, 0, update=False)
+                self._write_to_wire_in(0x04, 0, update=False)
+                self._write_to_wire_in(0x05, 0, update=False)
+                self._write_to_wire_in(0x07, data.n_pulses, update=False)
+                self._write_to_wire_in(0x0a, 0, update=False)
+                if self.calib[channel] is None:
+                    gain = 0x8000
+                    zero = 0x0000
+                else:
+                    t10, t90 = self.calib[channel]
+                    # c10 = 33, c90 = 295
+                    t90 = t90 / 20 * 65536
+                    t10 = t10 / 20 * 65536
+                    k = (t90 - t10) / 262
+                    b = ((t90 + t10 + 655.36) - 328 * 3 * k) / 2
+                    gain = 1 / k * (2 ** 16) - (2 ** 15)
+                    zero = - b / k
+                self._write_to_wire_in(0x0c, round(gain) & 0xffff, update=False)
+                self._write_to_wire_in(0x0d, round(zero) & 0xffff, update=False)
+                self._write_to_wire_in(0x06, (channel << 4) | (data.wf.index << 9), update=True)
+
+                # Send data update trigger
+                self._write_to_wire_in(0x06, 0x0100, mask=0x0100, update=True)
 
     def reset(self):
         with self.device_lock:
@@ -329,10 +360,14 @@ class OSC1Lite:
             return (self.dev.GetWireOutValue(0x21),
                     self.dev.GetWireOutValue(0x22))
 
-    def send_custom_waveform(self, index: int, data: CustomWaveform):
+    def send_custom_waveform(self, data: CustomWaveform):
+        logging.getLogger('OSC1Lite').debug(
+            'Sending custom_waveform #%d, len=%d', data.index, len(data.wave))
         buff = b'csw\n'
-        buff += struct.pack('<BBH', index, data.interval, len(data.wave))
+        buff += struct.pack('<BBH', data.index, data.clk_div, len(data.wave))
         for x in data.wave:
-            buff += struct.pack('<H', x)
+            word = round(x / 20000 * 65536)
+            word_amp = 0 if word < 0 else 0xffff if word > 0xffff else word
+            buff += struct.pack('<H', word_amp)
         with self.device_lock:
-            self.dev.WriteToPipeIn(0x80, buff)
+            self.dev.WriteToPipeIn(0x80, bytearray(buff))
