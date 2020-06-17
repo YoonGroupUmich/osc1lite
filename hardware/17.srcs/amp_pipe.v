@@ -52,16 +52,7 @@ assign pipe_out_read_data = reset ? 0
 						: (num_of_pulses == 16'b0) ? 0 
 						: ((pipe_out_read | state_read == 1'b1) && (complete_pulse_counter < num_of_pulses|| (complete_pulse_counter == num_of_pulses && read_counter == 0))) ? data_out 
 						: 0;
-			 
-blk_mem_gen_0 memory( 
-	.clka(ti_clk),				// input clka  
-	.wea(pipe_in_write),		// input [0 : 0] wea 
-	.addra(write_counter), 		// input [15 : 0] addra 
-	.dina(pipe_in_write_data), 	// input [15 : 0] dina 
-	.doutb(data_out), 			// output [15 : 0] douta);
-	.addrb(read_counter),
-	.clkb(clk)
-);	
+			
 
 always @ (posedge clk) begin
 	if(reset) begin

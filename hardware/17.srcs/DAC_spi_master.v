@@ -11,8 +11,6 @@ module spi_controller(
 	input  wire			rst,				// Opal Kelly reset
 	input  wire [2:0]	mode_pc, 			// Opal Kelly write bit: 3'b000 for nop, 3'b001 for write, 3'b010 for read, 3'b011 for control, 3'b100 for reset, 3'b101 for config
 	input  wire 		clear_request,		// OK clr DAC pin
-	input  wire			pipe,				// 1 if pipe
-	input  wire [15:0]	data_from_memory,	// waveform_info from memory
 	input  wire [15:0]	data_from_user,		// square waveform_info 
 	input  wire 		sdo_bit,			// data read from DAC
 	input  wire [1:0]	counter2spi,		// counter from read_input module to modulate the read/write cycle
@@ -78,7 +76,6 @@ assign full_command = //(mode == 3'b010) ?  {address_byte, 16'b0000000000000010}
 					: (mode == 3'b101) ? {address_byte, 16'b0000000000100000} // if config, set WD bits to 0
 					: (mode == 3'b000) ?  {address_byte, 16'b0000000000000000} // NOP
 					: (mode == 3'b111) ?  {address_byte, 16'b0000000000000000} // read status register
-					:  pipe ? {address_byte, data_from_memory} 
 					: {address_byte, amp_offset};			// if write, {address_byte -> [23:16], data_from_user -> [15:0]}
 
 assign spi_pipe_clk = (counter == 5'd29);

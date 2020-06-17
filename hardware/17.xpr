@@ -3,7 +3,7 @@
 <!--                                                         -->
 <!-- Copyright 1986-2019 Xilinx, Inc. All Rights Reserved.   -->
 
-<Project Version="7" Minor="40" Path="C:/Shared/osc1lite/hardware/17.xpr">
+<Project Version="7" Minor="40" Path="C:/Users/YoonGroup/Documents/wangqr/osc1lite/hardware/17.xpr">
   <DefaultLaunch Dir="$PRUNDIR"/>
   <Configuration>
     <Option Name="Id" Val="e01f3dc1d4d1413e83d79e6bb536698a"/>
@@ -24,7 +24,7 @@
     <Option Name="IPOutputRepo" Val="$PCACHEDIR/ip"/>
     <Option Name="IPCachePermission" Val="read"/>
     <Option Name="IPCachePermission" Val="write"/>
-    <Option Name="EnableCoreContainer" Val="FALSE"/>
+    <Option Name="EnableCoreContainer" Val="TRUE"/>
     <Option Name="CreateRefXciForCoreContainers" Val="FALSE"/>
     <Option Name="IPUserFilesDir" Val="$PIPUSERFILESDIR"/>
     <Option Name="IPStaticSourceDir" Val="$PIPUSERFILESDIR/ipstatic"/>
@@ -38,13 +38,13 @@
     <Option Name="WTVcsLaunchSim" Val="0"/>
     <Option Name="WTRivieraLaunchSim" Val="0"/>
     <Option Name="WTActivehdlLaunchSim" Val="0"/>
-    <Option Name="WTXSimExportSim" Val="4"/>
-    <Option Name="WTModelSimExportSim" Val="4"/>
-    <Option Name="WTQuestaExportSim" Val="4"/>
-    <Option Name="WTIesExportSim" Val="4"/>
-    <Option Name="WTVcsExportSim" Val="4"/>
-    <Option Name="WTRivieraExportSim" Val="4"/>
-    <Option Name="WTActivehdlExportSim" Val="4"/>
+    <Option Name="WTXSimExportSim" Val="10"/>
+    <Option Name="WTModelSimExportSim" Val="10"/>
+    <Option Name="WTQuestaExportSim" Val="10"/>
+    <Option Name="WTIesExportSim" Val="10"/>
+    <Option Name="WTVcsExportSim" Val="10"/>
+    <Option Name="WTRivieraExportSim" Val="10"/>
+    <Option Name="WTActivehdlExportSim" Val="10"/>
     <Option Name="GenerateIPUpgradeLog" Val="TRUE"/>
     <Option Name="XSimRadix" Val="hex"/>
     <Option Name="XSimTimeUnit" Val="ns"/>
@@ -55,6 +55,13 @@
   <FileSets Version="1" Minor="31">
     <FileSet Name="sources_1" Type="DesignSrcs" RelSrcDir="$PSRCDIR/sources_1">
       <Filter Type="Srcs"/>
+      <File Path="$PSRCDIR/sources_1/ip/blk_mem_gen_0.xcix">
+        <FileInfo>
+          <Attr Name="UsedIn" Val="synthesis"/>
+          <Attr Name="UsedIn" Val="implementation"/>
+          <Attr Name="UsedIn" Val="simulation"/>
+        </FileInfo>
+      </File>
       <File Path="$PSRCDIR/sources_1/ip/blk_mem_gen_0/blk_mem_gen_0.xci">
         <FileInfo>
           <Attr Name="UsedIn" Val="synthesis"/>
@@ -69,7 +76,7 @@
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
-      <File Path="$PSRCDIR/amp_pipe.v">
+      <File Path="$PSRCDIR/memory_read_tdm.v">
         <FileInfo>
           <Attr Name="UsedIn" Val="synthesis"/>
           <Attr Name="UsedIn" Val="implementation"/>
@@ -97,15 +104,6 @@
       <File Path="$PSRCDIR/sources_1/imports/Program Files/Opal Kelly/FrontPanelUSB/FrontPanelHDL/XEM7001-A15/okPipeIn.v">
         <FileInfo>
           <Attr Name="ImportPath" Val="$PPRDIR/../../Program Files/Opal Kelly/FrontPanelUSB/FrontPanelHDL/XEM7001-A15/okPipeIn.v"/>
-          <Attr Name="ImportTime" Val="1525201188"/>
-          <Attr Name="UsedIn" Val="synthesis"/>
-          <Attr Name="UsedIn" Val="implementation"/>
-          <Attr Name="UsedIn" Val="simulation"/>
-        </FileInfo>
-      </File>
-      <File Path="$PSRCDIR/sources_1/imports/Program Files/Opal Kelly/FrontPanelUSB/FrontPanelHDL/XEM7001-A15/okPipeOut.v">
-        <FileInfo>
-          <Attr Name="ImportPath" Val="$PPRDIR/../../Program Files/Opal Kelly/FrontPanelUSB/FrontPanelHDL/XEM7001-A15/okPipeOut.v"/>
           <Attr Name="ImportTime" Val="1525201188"/>
           <Attr Name="UsedIn" Val="synthesis"/>
           <Attr Name="UsedIn" Val="implementation"/>
@@ -155,6 +153,13 @@
           <Attr Name="UsedIn" Val="simulation"/>
         </FileInfo>
       </File>
+      <File Path="$PSRCDIR/read_pipe.v">
+        <FileInfo>
+          <Attr Name="UsedIn" Val="synthesis"/>
+          <Attr Name="UsedIn" Val="implementation"/>
+          <Attr Name="UsedIn" Val="simulation"/>
+        </FileInfo>
+      </File>
       <File Path="$PSRCDIR/trigger_in.v">
         <FileInfo>
           <Attr Name="UsedIn" Val="synthesis"/>
@@ -164,6 +169,24 @@
       </File>
       <File Path="$PSRCDIR/OSC1_LITE_one_channel_control.v">
         <FileInfo>
+          <Attr Name="UsedIn" Val="synthesis"/>
+          <Attr Name="UsedIn" Val="implementation"/>
+          <Attr Name="UsedIn" Val="simulation"/>
+        </FileInfo>
+      </File>
+      <File Path="$PSRCDIR/amp_pipe.v">
+        <FileInfo>
+          <Attr Name="AutoDisabled" Val="1"/>
+          <Attr Name="UsedIn" Val="synthesis"/>
+          <Attr Name="UsedIn" Val="implementation"/>
+          <Attr Name="UsedIn" Val="simulation"/>
+        </FileInfo>
+      </File>
+      <File Path="$PSRCDIR/sources_1/imports/Program Files/Opal Kelly/FrontPanelUSB/FrontPanelHDL/XEM7001-A15/okPipeOut.v">
+        <FileInfo>
+          <Attr Name="AutoDisabled" Val="1"/>
+          <Attr Name="ImportPath" Val="$PPRDIR/../../Program Files/Opal Kelly/FrontPanelUSB/FrontPanelHDL/XEM7001-A15/okPipeOut.v"/>
+          <Attr Name="ImportTime" Val="1525201188"/>
           <Attr Name="UsedIn" Val="synthesis"/>
           <Attr Name="UsedIn" Val="implementation"/>
           <Attr Name="UsedIn" Val="simulation"/>
