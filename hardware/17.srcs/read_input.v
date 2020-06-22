@@ -53,7 +53,7 @@ module read_input( 								// need to be called 12 times
 	assign rising_edge = amplitude*counter[26:7]*fixed;
 	assign falling_edge = amplitude*(Cth + 1 - counter[26:7])*fixed;
     assign resetflag = ((trig_mode == 1'b0) && (counter1 == wave_number_of_pulse)) ? 1'b1 : 1'b0;
-    assign mem_address = {waveform_select - 2'h1, cw_counter};
+    assign mem_address = {waveform_select - 2'h1, counter[21:7]};
     assign mult = (Option == 4'd0) ? 7'd1
                 : (Option == 4'd1) ? 7'd6
                 : (Option == 4'd2) ? 7'd29

@@ -271,7 +271,7 @@ read_pipe read_pipe0(
     .cw_clk_div(cw_clk_div),
     .cw_waveform_len(cw_waveform_len),
     
-    .DEBUG_recv_success(led[2:0])
+    .DEBUG_recv_success()
 );
 
 memory_read_tdm memory_read_tdm0(
@@ -283,6 +283,8 @@ memory_read_tdm memory_read_tdm0(
     .req_addr(mem_address),
     .req_data(mem_read_result)
 );
+
+assign led = mem_read_result[27+:8];
 
 okHost okHI(
 	.hi_in(hi_in), .hi_out(hi_out), .hi_inout(hi_inout), .hi_aa(hi_aa), .ti_clk(ti_clk),

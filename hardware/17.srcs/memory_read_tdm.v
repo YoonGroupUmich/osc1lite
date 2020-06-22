@@ -21,7 +21,7 @@ module memory_read_tdm(
     
     assign mem_addr = req_addr[(counter[4:1]*17+1) +: 16];
     
-    always @(posedge clk) begin
+    always @(negedge clk) begin
         if (counter >= 23) begin
             counter <= 0;
         end else begin
