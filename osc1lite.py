@@ -7,6 +7,10 @@ import struct
 import threading
 
 
+custom_waveform_index_range = range(1, 4)
+custom_waveform_div_range = range(1, 32)
+custom_waveform_max_len = 0x7fff
+
 class Waveform:
     pass
 
@@ -57,7 +61,7 @@ class ChannelInfo:
 
 class OSC1Lite:
     _bit_file_sha256sum = (
-        '975ad5cc70c8b3ef2a74569ef6ff4ea5ff232201191ff4dc1aee4b397e86244a')
+        '1062c8a609ff1a127f7179aff0db5605ba9f417b84cb2d787813fc5837c01e96')
 
     @staticmethod
     def _sha256sum(filename: str, block_size=2 ** 22):

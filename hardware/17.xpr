@@ -176,6 +176,7 @@
       </File>
       <File Path="$PSRCDIR/amp_pipe.v">
         <FileInfo>
+          <Attr Name="UserDisabled" Val="1"/>
           <Attr Name="AutoDisabled" Val="1"/>
           <Attr Name="UsedIn" Val="synthesis"/>
           <Attr Name="UsedIn" Val="implementation"/>
@@ -194,6 +195,7 @@
       </File>
       <File Path="$PSRCDIR/sources_1/imports/Program Files/Opal Kelly/FrontPanelUSB/FrontPanelHDL/XEM7001-A15/okLibrary.vhd">
         <FileInfo>
+          <Attr Name="UserDisabled" Val="1"/>
           <Attr Name="AutoDisabled" Val="1"/>
           <Attr Name="ImportPath" Val="$PPRDIR/../../Program Files/Opal Kelly/FrontPanelUSB/FrontPanelHDL/XEM7001-A15/okLibrary.vhd"/>
           <Attr Name="ImportTime" Val="1525201188"/>
@@ -244,9 +246,8 @@
       <Filter Type="Srcs"/>
       <Config>
         <Option Name="DesignMode" Val="RTL"/>
-        <Option Name="TopModule" Val="okHost"/>
+        <Option Name="TopModule" Val="OSC1_LITE_Control"/>
         <Option Name="TopLib" Val="xil_defaultlib"/>
-        <Option Name="TopArchitecture" Val="archHost"/>
         <Option Name="TopAutoSet" Val="TRUE"/>
         <Option Name="TransportPathDelay" Val="0"/>
         <Option Name="TransportIntDelay" Val="0"/>

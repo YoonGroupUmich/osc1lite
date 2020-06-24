@@ -21,9 +21,7 @@ module read_pipe(
     output wire [17:0] mem_data,
     
     output reg [14:0] cw_clk_div,
-    output reg [44:0] cw_waveform_len,
-    
-    output reg [2:0] DEBUG_recv_success
+    output reg [44:0] cw_waveform_len
 );
     reg state;  // 0: idle / metadata, 1: waveform
     reg [1:0] waveform_index_minus_one;
@@ -40,7 +38,6 @@ module read_pipe(
             cw_waveform_len <= 0;
             state <= 0;
             read_counter <= 0;
-            DEBUG_recv_success <= 0;
         end else if (pipe_data_ready) begin
             if (state == 0) begin
                 if (read_counter == 0) begin
@@ -66,7 +63,6 @@ module read_pipe(
                 if (read_counter + 1 == cw_waveform_len[waveform_index_minus_one * 15 +: 15]) begin
                     state <= 0;
                     read_counter <= 0;
-                    DEBUG_recv_success[waveform_index_minus_one] <= 1;
                 end else begin
                     read_counter <= read_counter + 1;
                 end

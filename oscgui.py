@@ -378,12 +378,7 @@ class CustomWavePanel(wx.FlexGridSizer):
         self.file_picker = wx.FilePickerCtrl(parent, -1, wildcard='*.cwave')
         self.file_picker.Bind(wx.EVT_FILEPICKER_CHANGED, self.on_file)
         self.Add(self.file_picker, 0, wx.EXPAND)
-        self.sample_rate_text = wx.Choice(parent, -1, choices=[
-            '17.152 \u03bcs (58.3 kHz)', '34.304 \u03bcs (29.2 kHz)', '51.456 \u03bcs (19.4 kHz)',
-            '68.608 \u03bcs (14.6 kHz)', '85.760 \u03bcs (11.7 kHz)', '102.912 \u03bcs (9.7 kHz)',
-            '120.064 \u03bcs (8.3 kHz)', '137.216 \u03bcs (7.3 kHz)', '154.368 \u03bcs (6.5 kHz)',
-            '171.520 \u03bcs (5.8 kHz)', '188.672 \u03bcs (5.3 kHz)', '205.824 \u03bcs (4.9 kHz)',
-            '222.976 \u03bcs (4.5 kHz)', '240.128 \u03bcs (4.2 kHz)', '257.280 \u03bcs (3.9 kHz)'])
+        self.sample_rate_text = wx.Choice(parent, -1, choices=['%.3f \u03bcs (%.1f kHz)' % (17.152 * x, 1000 / 17.152 / x) for x in osc1lite.custom_waveform_div_range])
         self.sample_rate_text.SetSelection(self.clk_div - 1)
         self.sample_rate_text.Bind(wx.EVT_CHOICE, self.on_sample_rate)
         self.Add(self.sample_rate_text, 0, wx.EXPAND)
@@ -391,10 +386,22 @@ class CustomWavePanel(wx.FlexGridSizer):
         self.modify_callback = modify_callback
 
     def on_file(self, event: wx.Event):
-        with open(self.file_picker.GetPath()) as fp:
-            self.wave = [float(x) for x in fp.read().split()]
-        self.modify_callback()
-        self.send_custom_waveform()
+        try:
+            with open(self.file_picker.GetPath()) as fp:
+                self.wave = [float(x) for x in fp.read().split()]
+        except ValueError:
+            wx.MessageBox(
+                    'Error parsing cwave file. Please check file format.',
+                    'Error', wx.ICON_ERROR | wx.OK | wx.CENTRE)
+            self.file_picker.SetPath('')
+        if 0 < len(self.wave) <= osc1lite.custom_waveform_max_len:
+            self.modify_callback()
+            self.send_custom_waveform()
+        else:
+            wx.MessageBox(
+                    'Error parsing cwave file. Number of samples in custom waveform must between 1 and %d.' % osc1lite.custom_waveform_max_len,
+                    'Error', wx.ICON_ERROR | wx.OK | wx.CENTRE)
+            self.file_picker.SetPath('')
 
     def on_sample_rate(self, event: wx.CommandEvent):
         self.clk_div = event.GetInt() + 1
@@ -412,12 +419,6 @@ class CustomWavePanel(wx.FlexGridSizer):
         wf = self.get_waveform()
         if wf.wave and self.mf.device:
             self.mf.device.send_custom_waveform(wf)
-
-    def set_index(self, index: int):
-        self.index = index
-        if index > 0:
-            self.send_custom_waveform()
-
 
 
 class WaveFormPanel(wx.StaticBoxSizer):
@@ -638,7 +639,7 @@ class WaveformManager(wx.ScrolledWindow):
         custom_index = set()
         for x in self.waveform_panels:
             custom_index.add(x.p_custom.index)
-        for i in range(1, 16):
+        for i in osc1lite.custom_waveform_index_range:
             if i not in custom_index:
                 return i
         return 0
@@ -1125,6 +1126,9 @@ class MainFrame(wx.Frame):
                     for x in self.channels_ui:
                         x.trigger_out_check.SetValue(True)
                     self.device.set_trigger_out(range(12), True)
+                for x in self.wfm.waveform_panels:
+                    if isinstance(x.detail, CustomWavePanel):
+                        x.detail.send_custom_waveform()
                 self.Thaw()
             else:
                 if self.device is None:
