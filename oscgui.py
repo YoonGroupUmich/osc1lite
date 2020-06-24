@@ -4,6 +4,7 @@ import configparser
 import json
 import logging
 import matplotlib.pyplot as plt
+import numpy as np
 import os
 import sys
 import threading
@@ -357,7 +358,7 @@ class SquareWavePanel(wx.FlexGridSizer):
 
 
 class CustomWavePanel(wx.FlexGridSizer):
-    "CustomWavePanel manages GUI logic related to custom wave and sine wave. It handles open and read custom waveform from cwave file."
+    "CustomWavePanel manages GUI logic related to custom wave. It handles open and read custom waveform from cwave file."
 
     def __init__(self, parent, modify_callback, mf, init_dict=None):
         wx.FlexGridSizer.__init__(self, 2, 2, 5, 5)
@@ -503,7 +504,6 @@ class WaveFormPanel(wx.StaticBoxSizer):
                 return
             else:
                 xs = [0]
-                ys = [0]
                 for i in range(n_pulses):
                     x_offset = xs[-1]
                     rise_time = (0, 0.1, 0.5, 1, 2)[wf.mode]
@@ -511,10 +511,10 @@ class WaveFormPanel(wx.StaticBoxSizer):
                                x_offset + wf.pulse_width * 1000 - rise_time,
                                x_offset + wf.pulse_width * 1000,
                                x_offset + wf.period * 1000))
-                    ys.extend((wf.amp, wf.amp, 0, 0))
+                ys = np.append(np.tile([0, wf.amp, wf.amp, 0], n_pulses), 0)
         elif isinstance(wf, osc1lite.CustomWaveform):
-            xs = range(len(wf.wave))
-            ys = wf.wave
+            xs = np.arange(n_pulses * len(wf.wave)) * wf.clk_div *0.017152
+            ys = np.tile(wf.wave, n_pulses)
         else:
             raise TypeError('Waveform type not supported')
         plt.figure(num='Preview for ' + self.label)
